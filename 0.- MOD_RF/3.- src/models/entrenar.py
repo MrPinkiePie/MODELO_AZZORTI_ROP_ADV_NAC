@@ -72,8 +72,8 @@ usar_boruta = False  # True para reducir variables con Boruta antes de Optuna
 max_iter=50
 
 usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
-n_trials = 100       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
-usar_ponderacion_temporal = False # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
+n_trials = 50       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
+usar_ponderacion_temporal = True # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
 
 
 
@@ -538,7 +538,6 @@ print('Mejores hiperparametros:', best_hp)
 # PASO 11: FIT DEL PIPELINE FINAL + GUARDAR .pkl
 #===============================================
 titulo_paso('PASO 11: FIT DEL PIPELINE FINAL + GUARDAR .pkl')
-pipe = construir_pipeline(features, best_hp, seed=seed)
 log(f'Entrenando pipeline con {X_train.shape[0]:,} filas y {X_train.shape[1]} variables '
     f'(hiperparametros {"de Optuna" if usar_optuna else "fijos"})...')
 
@@ -556,7 +555,9 @@ if usar_ponderacion_temporal and 'decay_rate' in best_hp:
     
     pipe.fit(X_train, y_train, modelo__sample_weight=sample_weights)
 else:
-    pipe = construir_pipeline(features, best_hp, seed=seed)
+    # Remover decay_rate por precaucion si estuviera en best_hp
+    hp_modelo = {k: v for k, v in best_hp.items() if k != 'decay_rate'}
+    pipe = construir_pipeline(features, hp_modelo, seed=seed)
     pipe.fit(X_train, y_train)
 
 log('Pipeline entrenado')
