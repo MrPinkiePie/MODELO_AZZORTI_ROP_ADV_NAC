@@ -1,0 +1,6 @@
+# 1.- references
+
+Documentacion de apoyo y tablas de referencia de negocio.
+
+- **SUBS_COMPETIDORES_RIN.xlsx** — tabla original (armada manualmente) que asigna una `CATEGORIAS` de competencia a cada `SUBGRUPO` de linea RIN. Ya no se lee en tiempo de ejecucion: su contenido se congelo como el diccionario `CATEGORIAS_POR_SUBGRUPO['RIN']` en `3.- src/data/cargar_datos.py`, para no depender de que el excel siga existiendo/sincronizado en cada corrida. Si aparecen SUBGRUPO RIN nuevos hay que agregarlos a mano a ese diccionario -- `mapear_categorias_por_subgrupo` imprime un aviso con los que no encuentran match.
+- **CATEGORIAS de REX** — mismo mecanismo que RIN: diccionario plano `CATEGORIAS_POR_SUBGRUPO['REX']` en `cargar_datos.py`, generado desde los SUBGRUPO reales de la tabla 1.1 (LINEA_FIN='REX') en los 5 paises -- incluye tanto adultos ("RE-...FEM/MSC") como infantil ("KA-...NINA"/"KO-...NINO", que comparten LINEA_FIN='REX' en esta fuente). Quedan fuera a proposito PAQUETONES, TAPABOCAS y los insumos/empaque que a veces traen transacciones reales (CUELLOS Y PUNOS, ELASTICOS, INSUMOS SEMIELABORADOS, BOLSAS MATERIALES DE EMPAQUE) -- no son categorias de prenda. Si aparece un SUBGRUPO REX nuevo (prenda real, no insumo) hay que agregarlo a mano al diccionario -- el aviso de "sin match" lo va a mostrar.

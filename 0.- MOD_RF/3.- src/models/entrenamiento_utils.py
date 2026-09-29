@@ -1,0 +1,189 @@
+"""
+Utilidades para preparar los datos de entrenamiento y afinar el modelo de
+ROP_ADV_NAC: split train/test por corte de campana, metrica de negocio
+(servicio/sobrante), armado de X/y, seleccion de variables con Boruta y
+tuning con Optuna (mismo enfoque simple que MODELO_AZZORTI_ROP_NAC_NAC: RF
+dentro de un Pipeline con CatBoostEncoder, evaluado con R2 sobre TEST -- sin
+seleccion de variables por Mutual Information ni folds temporales, para no
+sumar complejidad que el equipo no estaba usando). No hacen fit del modelo
+final (eso vive en entrenar.py, que ademas todavia no llega a ese paso -- ver
+TODO en entrenar.py).
+"""
+import numpy as np
+import pandas as pd
+import category_encoders as ce
+import optuna
+from boruta import BorutaPy
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+from sklearn.pipeline import Pipeline
+
+
+def dividir_train_test_por_corte(df, col_camp='CAMP', corte=202508):
+    """
+    Divide TRAIN/TEST por un corte fijo de campana (a diferencia de
+    dividir_train_test de MODELO_AZZORTI_ROP_NAC_NAC, que corta por fraccion
+    80/20 cronologica): todo lo >= corte queda como TEST.
+    """
+    df = df.copy()
+    df[col_camp] = df[col_camp].astype(int)
+    train = df[df[col_camp] < corte].copy()
+    test = df[df[col_camp] >= corte].copy()
+    print(f'Train shape: {train.shape}')
+    print(f'Test shape: {test.shape}')
+    return train, test
+
+
+def invert_y(y_pred, base_df, ratio_col, mode='log_ratio'):
+    """
+    Recupera la prediccion a escala FACTOR_RCP_DESTINO (la unidad real del negocio).
+    - raw       : y_pred
+    - log       : exp(y_pred)
+    - ratio     : y_pred * base_df[ratio_col]
+    - log_ratio : exp(y_pred) * base_df[ratio_col]
+    """
+    if mode == 'raw':
+        return y_pred
+    elif mode == 'log':
+        return np.exp(y_pred)
+    elif mode == 'ratio':
+        return y_pred * base_df[ratio_col].astype(float).values
+    elif mode == 'log_ratio':
+        return np.exp(y_pred) * base_df[ratio_col].astype(float).values
+    else:
+        raise ValueError(f'Y_MODE desconocido: {mode}')
+
+
+def rf_score_con_std(qs_df, df_test, ratio_col, y_mode='log_ratio', col_factor_real='FACTOR_RCP_DESTINO', col_camp='CAMP'):
+    """
+    Metrica de negocio: nivel de servicio (SERVICIO) menos 3x el sobrante
+    (SOBRANTE), penalizando ademas la variabilidad entre campanas (std). Muy
+    similar en espiritu a mis_funciones.svs_sbr_por_grupo (servicio/sobrante
+    por grupo), pero agregada globalmente y con el termino de std agregado
+    para no premiar un modelo que acierta en promedio pero es inestable
+    campana a campana.
+    """
+    df_eval = df_test.reset_index(drop=True).copy()
+
+    q50_raw = qs_df[0.5].values
+    q_mod = invert_y(q50_raw, df_eval, ratio_col=ratio_col, mode=y_mode)
+
+    df_eval['Q_MOD'] = np.clip(q_mod, 0.0, None)
+    df_eval[col_factor_real] = np.clip(df_eval[col_factor_real].astype(float).values, 0.0, None)
+
+    df_eval['SERVICIO'] = np.minimum(df_eval['Q_MOD'], df_eval[col_factor_real])
+    df_eval['SOBRANTE'] = np.maximum(df_eval['Q_MOD'] - df_eval[col_factor_real], 0.0)
+
+    df_eval[col_camp] = df_eval[col_camp].astype(int)
+    resumen = (
+        df_eval.groupby(col_camp)
+        .agg(SERVICIO_CAMP=('SERVICIO', 'sum'), SOBRANTE_CAMP=('SOBRANTE', 'sum'),
+             FACT_CAMP=(col_factor_real, 'sum'))
+        .assign(
+            NIVEL_SRV=lambda d: d['SERVICIO_CAMP'] / np.where(d['FACT_CAMP'] == 0, np.nan, d['FACT_CAMP']),
+            NIVEL_SBR=lambda d: d['SOBRANTE_CAMP'] / np.where(d['FACT_CAMP'] == 0, np.nan, d['FACT_CAMP']),
+        )
+        .reset_index()
+    )
+
+    fact_tot = resumen['FACT_CAMP'].sum()
+    if fact_tot == 0:
+        return -1e9, np.nan, np.nan, np.nan, np.nan
+
+    nivel_srv = resumen['SERVICIO_CAMP'].sum() / fact_tot
+    nivel_sbr = resumen['SOBRANTE_CAMP'].sum() / fact_tot
+    std_srv = resumen['NIVEL_SRV'].std(skipna=True)
+    std_sbr = resumen['NIVEL_SBR'].std(skipna=True)
+
+    score = nivel_srv - 3 * nivel_sbr - 0.5 * (std_srv + std_sbr)
+    return score, nivel_srv, nivel_sbr, std_srv, std_sbr
+
+
+def armar_x_y(df, features):
+    """
+    Separa un DataFrame en matriz de variables (X) y target (y) segun el dict
+    features (con llaves 'all' y 'target'). Igual que en
+    MODELO_AZZORTI_ROP_NAC_NAC.
+    """
+    X = df[features['all']]
+    y = df[features['target']]
+    return X, y
+
+
+def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42):
+    """
+    Corre BorutaPy sobre X_train/y_train (con un RandomForest ligero) para
+    seleccionar variables relevantes. Devuelve el dict features actualizado
+    (num/cat/all) dejando solo las confirmadas o tentativas. Copiada de
+    MODELO_AZZORTI_ROP_NAC_NAC.
+
+    max_iter: cantidad de iteraciones que corre Boruta (bajarlo reduce el
+    tiempo de corrida, a costa de una seleccion de features menos estable).
+    """
+    encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed)
+    X_train_num = encoder.fit_transform(X_train, y_train)
+
+    rf_boruta = RandomForestRegressor(n_estimators=200, max_depth=7, random_state=seed, n_jobs=-1)
+    boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=1, random_state=seed)
+    boruta.fit(X_train_num.values, y_train.values)
+
+    nombres = features['all']
+    print("Confirmadas :", [f for f, s in zip(nombres, boruta.support_) if s])
+    print("Tentativas  :", [f for f, s in zip(nombres, boruta.support_weak_) if s])
+    print("Rechazadas  :", [f for f, s in zip(nombres, boruta.support_) if not s])
+
+    keep = boruta.support_ | boruta.support_weak_
+    features = dict(features)
+    features['num'] = [f for f, k in zip(features['num'],
+                        [keep[nombres.index(f)] for f in features['num']]) if k]
+    features['cat'] = [f for f, k in zip(features['cat'],
+                        [keep[nombres.index(f)] for f in features['cat']]) if k]
+    features['all'] = features['num'] + features['cat']
+
+    print("Features finales para el modelo:", features['all'])
+    return features
+
+
+def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=42):
+    """
+    Arma la funcion objetivo de Optuna: en cada trial define un RandomForest
+    con hiperparametros sugeridos, lo entrena sobre train (dentro de un
+    Pipeline con CatBoostEncoder) y devuelve el R2 obtenido sobre test. Mismo
+    enfoque que MODELO_AZZORTI_ROP_NAC_NAC (sin seleccion de variables por
+    Mutual Information dentro del trial).
+    """
+    def objetivo(trial):
+        params = {
+            'n_estimators'     : trial.suggest_int('n_estimators', 300, 1200),
+            'max_depth'        : trial.suggest_int('max_depth', 5, 25),
+            'min_samples_leaf' : trial.suggest_int('min_samples_leaf', 1, 20),
+            'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+            'max_features'     : trial.suggest_float('max_features', 0.1, 1.0),
+        }
+
+        pipe_optuna = Pipeline(steps=[
+            ('encoder', ce.CatBoostEncoder(cols=features['cat'], random_state=seed)),
+            ('modelo',  RandomForestRegressor(**params, bootstrap=True, random_state=seed))
+        ])
+
+        pipe_optuna.fit(X_train, y_train)
+        y_pred = pipe_optuna.predict(X_test)
+
+        return r2_score(y_test, y_pred)
+
+    return objetivo
+
+
+def ejecutar_estudio_optuna(objetivo, n_trials=100, seed=42):
+    """
+    Corre un estudio de Optuna (maximizando) sobre la funcion objetivo dada y
+    devuelve los mejores hiperparametros encontrados. Copiada de
+    MODELO_AZZORTI_ROP_NAC_NAC.
+
+    n_trials: cantidad de combinaciones de hiperparametros que prueba Optuna
+    (bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina).
+    """
+    study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler(seed=seed))
+    study.optimize(objetivo, n_trials=n_trials)
+    print(study.best_params)
+    return study.best_params

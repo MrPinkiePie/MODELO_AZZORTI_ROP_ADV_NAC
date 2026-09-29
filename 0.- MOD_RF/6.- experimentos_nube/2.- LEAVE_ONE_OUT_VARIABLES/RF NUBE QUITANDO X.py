@@ -1,0 +1,395 @@
+#%%
+
+# -*- coding: utf-8 -*-
+"""
+Leave-one-out de variables para el Random Forest de ROP_ADV_NAC: entrena el
+combo completo y luego, una variable a la vez, un combo sin esa variable,
+para medir su impacto individual en SVS/SBR. Adaptado de
+MODELO_AZZORTI_ROP_NAC_NAC/6.- experimentos_nube/2.- LEAVE_ONE_OUT_VARIABLES/
+RF NUBE QUITANDO X.py: misma logica, con la lista de features real de este
+modelo (ver 'features' en 3.- src/models/entrenar.py) y agrupando por 'CAMP'
+(ADV_NAC no tiene columna CAMP_DESTINO).
+"""
+
+from itertools import combinations, chain
+from sklearn.metrics import mean_absolute_error
+from sklearn.preprocessing import StandardScaler
+from category_encoders import CatBoostEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+import time
+from joblib import Parallel, delayed
+from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+import pandas as pd
+import os
+from pathlib import Path  # resolver la carpeta del archivo para el export a excel
+
+import warnings
+warnings.filterwarnings("ignore")
+
+
+# Este script vive en 0.- MOD_RF/6.- experimentos_nube/2.- LEAVE_ONE_OUT_VARIABLES/,
+# por eso parents[2] es 0.- MOD_RF
+DEV_ROOT = Path(__file__).resolve().parents[2]
+
+comentario = "prueba_1"
+USAR_TOP_K_FEATURES = True  # False = usa todas las numeric_features+categorical_features (busqueda completa)
+N_ESTIMATORS_BUSQUEDA = 100  # arboles del RF SOLO durante la busqueda combinatoria; subir a 637 para el modelo final
+TOP_K_FEATURES = 14
+QUITAR_UNA_X = True  # True = leave-one-out (N+1 combos); False = busqueda combinatoria completa (2^n-1 combos)
+
+# ----1. Cargar los datos ya armados por entrenar.py (PASO 9: export a df_limpio.parquet)
+df = pd.read_parquet(DEV_ROOT / '0.- data' / 'processed' / 'df_limpio.parquet')
+
+TRAIN = df[df["SPLIT"] == "TRAIN"].copy()
+TEST = df[df["SPLIT"].isin(["TEST", 'VALIDACION'])].copy()
+
+print("Train shape:", TRAIN.shape)
+print("Test shape:", TEST.shape)
+
+target = ['LOG_RATIO_FACTOR']
+
+cycle_features = []
+
+# Candidatas numericas/categoricas -- mismo listado que 'features' en
+# entrenar.py, sin los factores regionales crudos (FACT_BOG/FACT_LIMA/etc,
+# distintos segun PAIS_ORIGEN COL/PER): esos ya quedan resumidos en
+# FACTOR_MAX/MIN/MEDIANA, que si son comunes a ambos paises. Si se quiere
+# probar tambien los crudos, agregarlos aca a mano segun el PAIS_ORIGEN usado
+# en la corrida de entrenar.py que genero df_limpio.parquet.
+numeric_features = [
+    'RATIO_PRECIO', 'FACT_ADV_RGN',
+    'FACTOR_MAX', 'FACTOR_MIN', 'FACTOR_MEDIANA',
+    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN',
+    'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN', 'RATIO_PROMEDIO_PRECIO_ORIGEN_SUBGRUPO',
+    'NUM_PRODUCTOS_POR_CATEGORIAS_ORIGEN', 'NUM_PRODUCTOS_POR_SUBGRUPO_ORIGEN',
+    'NUM_PRODUCTOS_POR_CATEGORIAS_PAGINA_ORIGEN',
+    'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'PRECIO_PROMEDIO_SUBGRUPO_DESTINO',
+    'RATIO_PROMEDIO_COMPETIDORES_PRECIO_DESTINO', 'RATIO_PROMEDIO_PRECIO_DESTINO_SUBGRUPO',
+    'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO', 'NUM_PRODUCTOS_POR_SUBGRUPO_DESTINO',
+    'NUM_PRODUCTOS_POR_CATEGORIAS_PAGINA_DESTINO',
+    'PRECIO_N', 'PRECIO_ADV_IN',
+    'PAG_ADV_IN', 'PAG_NAC_NEW', 'PAG_ADV_IN_PAG_DER', 'PAG_NAC_NEW_PAG_DER', 'RATIO_PAG_NAC_ADV',
+    'EXPOSICION_ORIGEN', 'EXPOSICION_DESTINO', 'RATIO_EXPOSICION',
+    'CAMP_SEN', 'CAMP_COS',
+]
+
+categorical_features = [
+    'SUBGRUPO', 'CATEGORIAS', 'GRUPO', 'CAMBIO_PAG_LADO', 'TIPO_REF',
+    'ESTR_MIX', 'UBICACION_PAG_MIX', 'NUM_CAMP_MIX',
+]
+
+
+# =========================================================
+# ANALISIS DE CORRELACION Y MUTUAL INFORMATION (seleccion de variables)
+# Objetivo: detectar variables redundantes antes de la busqueda combinatoria
+# =========================================================
+from sklearn.feature_selection import mutual_info_regression
+
+# ---- 1. Correlacion de Spearman ----
+cols_corr = numeric_features + target
+corr_matrix = TRAIN[cols_corr].corr(method='spearman')
+
+print('\n=== 1. CORRELACION DE SPEARMAN (numericas vs target) ===')
+print(corr_matrix)
+
+# ---- 2. Mutual Information ----
+encoder_mi = CatBoostEncoder(cols=categorical_features, handle_missing="value", handle_unknown="value")
+X_mi = TRAIN[numeric_features + categorical_features].copy()
+X_mi[categorical_features] = encoder_mi.fit_transform(X_mi[categorical_features], TRAIN[target[0]])
+y_mi = TRAIN[target[0]]
+
+mi_scores = mutual_info_regression(X_mi, y_mi, discrete_features=False, random_state=42)
+
+mi_df = pd.DataFrame({
+    'variable': X_mi.columns,
+    'mutual_info': mi_scores
+}).sort_values('mutual_info', ascending=False)
+
+print('\n=== 2. MUTUAL INFORMATION (ordenado de mayor a menor) ===')
+print(mi_df.to_string(index=False))
+
+# ---- 3. Comparativo correlacion (numericas) vs mutual information (todas) ----
+corr_target = corr_matrix[target[0]].drop(target[0]).abs().rename('corr_abs_spearman')
+comparativo = mi_df.set_index('variable').join(corr_target, how='left').sort_values('mutual_info', ascending=False)
+
+print('\n=== 3. COMPARATIVO: MUTUAL INFORMATION vs CORRELACION SPEARMAN ===')
+print(comparativo)
+
+# ---- 4. Seleccionar top-k features por Mutual Information ----
+if USAR_TOP_K_FEATURES:
+    features_seleccionadas = mi_df.head(TOP_K_FEATURES)['variable'].tolist()
+    print(f'\n=== 4. TOP {TOP_K_FEATURES} FEATURES SELECCIONADAS (USAR_TOP_K_FEATURES=True) ===')
+else:
+    features_seleccionadas = numeric_features + categorical_features
+    print('\n=== 4. USANDO TODAS LAS FEATURES (USAR_TOP_K_FEATURES=False) ===')
+print(features_seleccionadas)
+
+
+start_time = time.time()  # Marca de inicio
+
+
+def svs_sbr(q_est, q_real):
+    svs = np.where(q_est > q_real, q_real, q_est)
+    sbr = np.where(q_est > q_real, q_est - q_real, 0)
+    svs_total = round((sum(svs) / sum(q_real)) * 100, 2)
+    sbr_total = round((sum(sbr) / sum(q_real)) * 100, 2)
+    return svs, sbr, svs_total, sbr_total
+
+
+def all_combinations(features):
+    return list(chain.from_iterable(combinations(features, r) for r in range(1, len(features) + 1)))
+
+
+def leave_one_out_combinations(features):
+    # Combo base (todas las variables) + un combo por cada variable removida, para comparar el efecto individual de quitarla
+    combos = [tuple(features)]
+    for f in features:
+        combos.append(tuple(x for x in features if x != f))
+    return combos
+
+
+def run_model_on_combination(feature_combo):
+    num = [f for f in feature_combo if f in numeric_features]
+    cat = [f for f in feature_combo if f in categorical_features]
+    cyc = [f for f in feature_combo if f in cycle_features]
+
+    # Variable(s) ausentes en este combo respecto al set completo -> identifica el leave-one-out
+    todas_las_variables = features_seleccionadas + cycle_features
+    faltantes = [v for v in todas_las_variables if v not in feature_combo]
+    if not faltantes:
+        variable_quitada = 'NINGUNA'
+    elif len(faltantes) == 1:
+        variable_quitada = faltantes[0]
+    else:
+        variable_quitada = ', '.join(faltantes)
+
+    try:
+        X_train = TRAIN[num + cat + cyc].copy()
+        X_test = TEST[num + cat + cyc].copy()
+        y_train = TRAIN[target[0]]
+        y_test = TEST[target[0]]
+
+        if cyc:
+            X_train[cyc] = X_train[cyc].astype(int)
+            X_test[cyc] = X_test[cyc].astype(int)
+
+        pre_steps = []
+
+        if cat:
+            pre_steps.append(('cat_encoder', CatBoostEncoder(cols=cat, handle_missing="value", handle_unknown="value")))
+
+        col_transformers = []
+        if numeric_features:
+            col_transformers.append(
+                ('num', Pipeline(steps=[('scaler', StandardScaler())]), num))
+
+        if col_transformers:
+            pre_steps.append(('col_transform', ColumnTransformer(col_transformers, remainder='passthrough')))
+
+        preprocessor = Pipeline(pre_steps)
+
+        pipeline = Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            ('regressor', RandomForestRegressor(
+                n_estimators=N_ESTIMATORS_BUSQUEDA, max_depth=19, min_samples_leaf=4, min_samples_split=4, max_features=0.32148581998124864))
+        ])
+
+        pipeline.fit(X_train, y_train)
+
+        X_test_transformed = pipeline.named_steps['preprocessor'].transform(X_test)
+        estimators = pipeline.named_steps['regressor'].estimators_
+        all_predictions = np.array([est.predict(X_test_transformed) for est in estimators])
+
+        percentiles = [2.5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 97.5]
+        percentile_names = ['LIN_INF', 'Q_10', 'Q_20', 'Q_30', 'Q_40', 'Q_50',
+                             'Q_60', 'Q_70', 'Q_80', 'Q_90', 'LIM_SUP']
+
+        predicted_percentiles = np.percentile(all_predictions, percentiles, axis=0)
+
+        X_train_transformed = pipeline.named_steps['preprocessor'].transform(X_train)
+        estimators = pipeline.named_steps['regressor'].estimators_
+        all_predictions = np.array([est.predict(X_train_transformed) for est in estimators])
+
+        predicted_percentiles_train = np.percentile(all_predictions, percentiles, axis=0)
+
+        num_variables = X_train.shape[1]
+
+        results = []
+        for i, name in enumerate(percentile_names):
+
+            # LOG_RATIO_FACTOR: exp(pred)/1000 - 0.0001, sin el log-shift que
+            # usa NAC_NAC (ver invert_y en 3.- src/models/entrenamiento_utils.py)
+            pred_adjusted = (np.exp(predicted_percentiles[i]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN']
+
+            y_real = 'FACTOR_RCP_DESTINO'
+
+            svs_ind, sbr_ind, srv_total, sbr_total = svs_sbr(pred_adjusted, TEST[y_real])
+
+            pred_adjusted_train = (np.exp(predicted_percentiles_train[i]) / 1000 - 0.0001) * TRAIN['FACTOR_RCP_ORIGEN']
+
+            svs_ind_train, sbr_ind_train, srv_total_train, sbr_total_train = svs_sbr(pred_adjusted_train, TRAIN[y_real])
+
+            TEST_TEMP = TEST.copy()
+            TEST_TEMP['SVS_IND'] = svs_ind
+            TEST_TEMP['SBR_IND'] = sbr_ind
+
+            # agrupado por CAMP (campana destino) -- ADV_NAC no tiene CAMP_DESTINO
+            grouped = TEST_TEMP.groupby('CAMP').agg({
+                'SVS_IND': lambda x: (sum(x) / sum(TEST_TEMP.loc[x.index, y_real])) * 100,
+                'SBR_IND': lambda x: (sum(x) / sum(TEST_TEMP.loc[x.index, y_real])) * 100
+            })
+
+            std_svs = grouped['SVS_IND'].std()
+            std_sbr = grouped['SBR_IND'].std()
+
+            lim_sup = (np.exp(predicted_percentiles[-1]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
+            lim_inf = (np.exp(predicted_percentiles[0]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
+            per_50 = (np.exp(predicted_percentiles[5]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
+
+            ratio_per_50_lim_inf = sum(per_50) / sum(lim_inf)
+            ratio_lim_sup_per_50 = sum(lim_sup) / sum(per_50)
+
+            real_values = TEST[y_real].values
+            above_lim_sup = np.sum(real_values > lim_sup)
+            below_lim_inf = np.sum(real_values < lim_inf)
+            outside_percent = ((above_lim_sup + below_lim_inf) / len(real_values)) * 100
+
+            negativos = np.sum(pred_adjusted < 0)
+            total_elementos = len(pred_adjusted)
+            porcentaje_negativos = (negativos / total_elementos) * 100
+
+            mae_test = mean_absolute_error(TEST[y_real], pred_adjusted)
+            mape_test = np.mean(np.abs((TEST[y_real].values - pred_adjusted) / TEST[y_real].values)) * 100
+
+            mae_train = mean_absolute_error(TRAIN[y_real], pred_adjusted_train)
+            mape_train = np.mean(np.abs((TRAIN[y_real].values - pred_adjusted_train) / TRAIN[y_real].values)) * 100
+
+            results.append({
+                'MODELO': 'RANDOM FOREST',
+                'TARGET': 'RATIO',
+                'PERCENTIL': name,
+                'NÚMERO DE VARIABLES': num_variables,
+                'VARIABLES': feature_combo,
+                'VARIABLE_QUITADA': variable_quitada,
+                'SRV_TEST': srv_total,
+                'SBR_TEST': sbr_total,
+                'SRV_TRAIN': srv_total_train,
+                'SBR_TRAIN': sbr_total_train,
+                'STD_SRV': round(std_svs, 2),
+                'STD_SBR': round(std_sbr, 2),
+                'MAE_TEST': round(mae_test, 4),
+                'MAPE_TEST': round(mape_test, 2),
+                'MAE_TRAIN': round(mae_train, 4),
+                'MAPE_TRAIN': round(mape_train, 2),
+                'NEGATIVE': negativos,
+                'T0TAL_ELEMENTOS': total_elementos,
+                'PORCENTAJE_NEGATIVOS': porcentaje_negativos,
+                'RATIO_LIMITES_50_INF': ratio_per_50_lim_inf,
+                'RATIO_LIMITES_SUP_50': ratio_lim_sup_per_50,
+                'DENTRO DE LÍMITES': (100 - round(outside_percent, 2))
+            })
+
+        return results
+
+    except Exception as e:
+        return [{
+            'MODELO': 'RANDOM FOREST',
+            'TARGET': 'RATIO',
+            'PERCENTIL': name,
+            'NÚMERO DE VARIABLES': None,
+            'VARIABLES': feature_combo,
+            'VARIABLE_QUITADA': variable_quitada,
+            'SRV_TEST': None,
+            'SBR_TEST': None,
+            'SRV_TRAIN': None,
+            'SBR_TRAIN': None,
+            'STD_SRV': None,
+            'STD_SBR': None,
+            'MAE_TEST': None,
+            'MAPE_TEST': None,
+            'MAE_TRAIN': None,
+            'MAPE_TRAIN': None,
+            'NEGATIVE': None,
+            'T0TAL_ELEMENTOS': None,
+            'PORCENTAJE_NEGATIVOS': None,
+            'RATIO_LIMITES_50_INF': None,
+            'RATIO_LIMITES_SUP_50': None,
+            'DENTRO DE LÍMITES': None,
+            'Error': str(e)
+        } for name in ['LIN_INF', 'Q_10', 'Q_20', 'Q_30', 'Q_40', 'Q_50', 'Q_60', 'Q_70', 'Q_80', 'Q_90', 'LIM_SUP']]
+
+
+start_time = time.time()  # Marca de inicio
+if QUITAR_UNA_X:
+    feature_combos = leave_one_out_combinations(features_seleccionadas + cycle_features)
+else:
+    feature_combos = all_combinations(features_seleccionadas + cycle_features)
+n_combos = len(feature_combos)
+
+# ---- Estimar tiempo total antes de lanzar todos los combos ----
+n_cores = os.cpu_count() or 1
+t0 = time.time()
+primer_resultado = run_model_on_combination(feature_combos[0])
+tiempo_por_combo = time.time() - t0
+tiempo_estimado_min = (n_combos * tiempo_por_combo) / n_cores / 60
+
+print('\n=== TIEMPO ESTIMADO ===')
+print(f'Combinaciones a probar: {n_combos}')
+print(f'Tiempo de 1 combinacion (referencia): {tiempo_por_combo:.1f} seg')
+print(f'Tiempo estimado total (~{n_cores} cores en paralelo): {tiempo_estimado_min:.1f} min')
+
+# Lanzar el resto en paralelo
+resultados_restantes = Parallel(n_jobs=-1, verbose=10, prefer='threads')(
+    delayed(run_model_on_combination)(combo) for combo in feature_combos[1:])
+results = [primer_resultado] + resultados_restantes
+
+flattened_results = list(chain.from_iterable(results))
+results_df = pd.DataFrame(flattened_results)
+
+end_time = time.time()  # Marca de fin
+elapsed_time = end_time - start_time
+print(f"⏱️ Tiempo de ejecución: {elapsed_time:.4f} segundos")
+
+results_df_export = results_df.copy()
+results_df_export['VARIABLES'] = results_df['VARIABLES'].astype(str)
+results_df_export["MODELO"] = "LOG_RATIO_FACTOR"
+results_df_export.TARGET = "LOG_RATIO_FACTOR"
+
+EXPORTAMOS = results_df_export
+count = EXPORTAMOS["MODELO"].value_counts()
+print(count)
+
+columnas_clave = ['MODELO', 'TARGET', 'VARIABLES']
+
+EXPORTAMOS['ANDROIDE'] = EXPORTAMOS.groupby(columnas_clave).ngroup()
+EXPORTAMOS['ANDROIDE'] = EXPORTAMOS['ANDROIDE'].astype(str)
+
+count = EXPORTAMOS["MODELO"].value_counts()
+EXPORTAMOS.to_csv(Path(__file__).resolve().parent / 'df_leave_one_out.csv',
+                   index=False, sep=',', encoding='cp1252')
+
+# %%
+
+# ---- Tabla resumen: SRV/SBR (percentil Q_50) por variable quitada ----
+tabla_resumen = results_df.loc[results_df['PERCENTIL'] == 'Q_50', ['VARIABLE_QUITADA', 'SRV_TEST', 'SBR_TEST']].copy()
+tabla_resumen = tabla_resumen.rename(columns={'VARIABLE_QUITADA': 'VARIABLE', 'SRV_TEST': 'SRV', 'SBR_TEST': 'SBR'})
+tabla_resumen['VARIABLE'] = tabla_resumen['VARIABLE'].replace({'NINGUNA': 'ALL'})
+
+tabla_resumen = tabla_resumen.sort_values('VARIABLE', key=lambda s: s != 'ALL').reset_index(drop=True)
+
+srv_all = tabla_resumen.loc[tabla_resumen['VARIABLE'] == 'ALL', 'SRV'].iloc[0]
+sbr_all = tabla_resumen.loc[tabla_resumen['VARIABLE'] == 'ALL', 'SBR'].iloc[0]
+
+tabla_resumen['PERDIDA_SRV'] = round(srv_all - tabla_resumen['SRV'], 2)
+tabla_resumen['PERD_SOBR'] = round(tabla_resumen['SBR'] - sbr_all, 2)
+tabla_resumen.loc[tabla_resumen['VARIABLE'] == 'ALL', ['PERDIDA_SRV', 'PERD_SOBR']] = np.nan
+tabla_resumen['ERROR'] = ((100 - tabla_resumen['SRV']) + tabla_resumen['SBR']).round(2)
+
+print('\n=== TABLA RESUMEN SRV/SBR (Q_50) POR VARIABLE QUITADA ===')
+print(tabla_resumen.to_string(index=False))
+
+tabla_resumen.to_excel(Path(__file__).resolve().parent / 'tabla_resumen.xlsx', index=False)
+
+# %%
