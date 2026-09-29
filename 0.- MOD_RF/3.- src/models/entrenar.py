@@ -73,6 +73,7 @@ max_iter=50
 
 usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
 n_trials = 100       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
+usar_ponderacion_temporal = False # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
 
 
 
@@ -521,7 +522,8 @@ else:
 #===============================================
 titulo_paso('PASO 10: OPTUNA (RF + CatBoostEncoder en Pipeline, evaluado con R2 sobre TEST)')
 if usar_optuna:
-    objetivo = construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=seed)
+    camp_train = train['CAMP'] if usar_ponderacion_temporal else None
+    objetivo = construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=seed, train_camp=camp_train)
     best_hp = ejecutar_estudio_optuna(objetivo, n_trials=n_trials, seed=seed)
 else:
     # mejor trial encontrado en una corrida de prueba (20 trials, ECU/RIN) --
@@ -539,7 +541,24 @@ titulo_paso('PASO 11: FIT DEL PIPELINE FINAL + GUARDAR .pkl')
 pipe = construir_pipeline(features, best_hp, seed=seed)
 log(f'Entrenando pipeline con {X_train.shape[0]:,} filas y {X_train.shape[1]} variables '
     f'(hiperparametros {"de Optuna" if usar_optuna else "fijos"})...')
-pipe.fit(X_train, y_train)
+
+if usar_ponderacion_temporal and 'decay_rate' in best_hp:
+    camp_str = train['CAMP'].astype(str)
+    anios = camp_str.str[:4].astype(int)
+    ciclos = camp_str.str[4:].astype(int)
+    tiempo_absoluto = anios * 18 + ciclos
+    distancia = tiempo_absoluto.max() - tiempo_absoluto
+    sample_weights = np.exp(-best_hp['decay_rate'] * distancia)
+    
+    # Remover decay_rate de best_hp porque RandomForest no lo acepta como parámetro nativo
+    hp_modelo = {k: v for k, v in best_hp.items() if k != 'decay_rate'}
+    pipe = construir_pipeline(features, hp_modelo, seed=seed)
+    
+    pipe.fit(X_train, y_train, modelo__sample_weight=sample_weights)
+else:
+    pipe = construir_pipeline(features, best_hp, seed=seed)
+    pipe.fit(X_train, y_train)
+
 log('Pipeline entrenado')
 
 if guardar_pkl:
@@ -599,6 +618,15 @@ PRUEBAS_MODELO_DIR.mkdir(parents=True, exist_ok=True)
 nombre_archivo_pruebas = f'df_{pais_origen}_{pais_destino}_{linea}_{comentario}.csv'
 df_final.to_csv(PRUEBAS_MODELO_DIR / nombre_archivo_pruebas, index=False, encoding='cp1252')
 resumen_filas(df_final, f'exportado PRUEBAS_MODELO/{nombre_archivo_pruebas}')
+
+# NUEVO: Conteo de Referencias por Campaña para Auditoría (DSB)
+df_auditoria = df_final.groupby('CAMP')['NOMBRE_SAP'].nunique().reset_index()
+df_auditoria.rename(columns={'NOMBRE_SAP': 'CANTIDAD_REFERENCIAS'}, inplace=True)
+nombre_archivo_auditoria = f'Auditoria_Cantidades_{pais_origen}_{pais_destino}_{linea}_{comentario}.xlsx'
+excel_dir = Path(__file__).resolve().parents[2] / '5.- reports' / 'excel'
+excel_dir.mkdir(parents=True, exist_ok=True)
+df_auditoria.to_excel(excel_dir / nombre_archivo_auditoria, index=False)
+log(f'✅ Auditoría de cantidades (referencias por campaña) exportada en 5.- reports/excel/{nombre_archivo_auditoria}')
 
 # copia en las pruebas de 0.- MOD_TLL (alli se consolida referencia vs talla para el Power BI)
 if TLL_ROOT.exists():

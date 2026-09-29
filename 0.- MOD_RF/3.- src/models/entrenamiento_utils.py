@@ -144,7 +144,7 @@ def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=4
     return features
 
 
-def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=42):
+def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=42, train_camp=None):
     """
     Arma la funcion objetivo de Optuna: en cada trial define un RandomForest
     con hiperparametros sugeridos, lo entrena sobre train (dentro de un
@@ -166,7 +166,26 @@ def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=4
             ('modelo',  RandomForestRegressor(**params, bootstrap=True, random_state=seed))
         ])
 
-        pipe_optuna.fit(X_train, y_train)
+        if train_camp is not None:
+            # Ponderación Exponencial por Antigüedad
+            decay_rate = trial.suggest_float('decay_rate', 0.0, 1.0)
+            
+            # Asumimos que train_camp.max() es la campaña más reciente en train (ej. 202511)
+            # Para evitar que el gap numérico entre años afecte (ej 202501 - 202418), 
+            # lo ideal sería usar un índice ordinal o simplificar con resta directa.
+            # Convertimos a string, sacamos año y campaña para hacer una distancia real en campañas.
+            camp_str = train_camp.astype(str)
+            anios = camp_str.str[:4].astype(int)
+            ciclos = camp_str.str[4:].astype(int)
+            # Convertir a un índice de tiempo absoluto (cada año tiene 18 campañas)
+            tiempo_absoluto = anios * 18 + ciclos
+            distancia = tiempo_absoluto.max() - tiempo_absoluto
+            
+            sample_weights = np.exp(-decay_rate * distancia)
+            pipe_optuna.fit(X_train, y_train, modelo__sample_weight=sample_weights)
+        else:
+            pipe_optuna.fit(X_train, y_train)
+            
         y_pred = pipe_optuna.predict(X_test)
 
         return r2_score(y_test, y_pred)
