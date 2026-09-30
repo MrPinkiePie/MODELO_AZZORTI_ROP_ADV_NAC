@@ -1,0 +1,119 @@
+"""
+Análisis Exploratorio de Datos (EDA) sobre Estacionalidad del Target.
+Revisa el comportamiento de RATIO_FACTOR a lo largo del tiempo, por campaña, por año,
+y por festividades (Día de la Madre, Día del Padre).
+"""
+import sys
+from pathlib import Path
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+# Asegurar importes desde src
+sys.path.append(str(Path(__file__).resolve().parents[1] / "3.- src"))
+from config import DATA_PROCESSED
+
+# Configuración visual
+sns.set_theme(style="whitegrid")
+plt.rcParams['figure.figsize'] = (12, 6)
+
+print("Cargando dataset limpio...")
+df = pd.read_parquet(DATA_PROCESSED / 'df_limpio.parquet')
+print(f"Dataset cargado: {df.shape[0]:,} filas y {df.shape[1]} columnas.")
+
+# TARGET_VISUAL: usamos la escala real para visualizar la estacionalidad claramente
+TARGET = 'RATIO_FACTOR'
+
+# Verificar columnas de tiempo (ANIO, NUM_CAMP, CAMP)
+if 'NUM_CAMP' not in df.columns or 'ANIO' not in df.columns:
+    df['NUM_CAMP'] = df['CAMP'].astype(str).str[-2:].astype(int)
+    df['ANIO'] = df['CAMP'].astype(str).str[:4].astype(int)
+
+# Crear variable de Género Inferido si no existe
+if 'GENERO_INFERIDO' not in df.columns and 'CATEGORIAS' in df.columns:
+    cat_str = df['CATEGORIAS'].astype(str).str.upper()
+    df['GENERO_INFERIDO'] = np.select(
+        [cat_str.str.contains('FEM'), cat_str.str.contains('MSC')], 
+        ['FEMENINO', 'MASCULINO'], 
+        default='MIXTO / OTRO'
+    )
+
+# -------------------------------------------------------------
+# SECCION 1: ESTACIONALIDAD POR AÑO Y CAMPAÑA (LINEPLOT)
+# -------------------------------------------------------------
+print("\n--- 1. Estacionalidad Promedio por Campaña y Año ---")
+# Agrupamos por año y número de campaña para sacar el promedio del ratio
+df_season = df.groupby(['ANIO', 'NUM_CAMP'])[TARGET].mean().reset_index()
+
+plt.figure(figsize=(12, 6))
+sns.lineplot(data=df_season, x='NUM_CAMP', y=TARGET, hue='ANIO', marker='o', palette='tab10')
+plt.title(f"Comportamiento de {TARGET} a lo largo del año (por Campaña de Destino)")
+plt.xlabel("Número de Campaña (1 a 18)")
+plt.ylabel(f"Promedio de {TARGET}")
+plt.xticks(range(1, 19))
+plt.legend(title='Año')
+plt.tight_layout()
+plt.show()
+
+# -------------------------------------------------------------
+# SECCION 2: DESCOMPOSICIÓN ESTACIONAL (SEASONAL DECOMPOSE)
+# -------------------------------------------------------------
+print("\n--- 2. Descomposición Estacional (Tendencia, Estacionalidad, Residuos) ---")
+# Creamos una serie de tiempo continua (CAMP en orden cronológico)
+df_ts = df.groupby('CAMP')[TARGET].mean().sort_index()
+
+# Verificamos que tengamos al menos 2 periodos completos (36 campañas) para una buena descomposición
+if len(df_ts) >= 36:
+    # Period=18 porque hay 18 campañas en un año
+    result = seasonal_decompose(df_ts.values, model='additive', period=18)
+    
+    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+    axes[0].plot(df_ts.index, df_ts.values, label='Original')
+    axes[0].legend(loc='upper left')
+    axes[0].set_title("Serie de Tiempo Original (Promedio por Campaña)")
+    
+    axes[1].plot(df_ts.index, result.trend, label='Tendencia', color='orange')
+    axes[1].legend(loc='upper left')
+    
+    axes[2].plot(df_ts.index, result.seasonal, label='Estacionalidad', color='green')
+    axes[2].legend(loc='upper left')
+    
+    axes[3].plot(df_ts.index, result.resid, label='Residuos', color='red', marker='o', linestyle='none')
+    axes[3].legend(loc='upper left')
+    
+    # Reducir etiquetas del eje X para que no se amontonen
+    plt.xticks(ticks=range(0, len(df_ts), 6), labels=df_ts.index[::6], rotation=45)
+    plt.tight_layout()
+    plt.show()
+else:
+    print(f"No hay suficientes campañas ({len(df_ts)}) para hacer seasonal_decompose con period=18. Se necesitan al menos 36.")
+
+# -------------------------------------------------------------
+# SECCION 3: EVENTOS ESPECIALES (DIA DE LA MADRE Y PADRE) POR GÉNERO
+# -------------------------------------------------------------
+print("\n--- 3. Efecto de Festividades por Género ---")
+if 'GENERO_INFERIDO' in df.columns:
+    df_gender = df[df['GENERO_INFERIDO'].isin(['FEMENINO', 'MASCULINO'])]
+    df_gender_season = df_gender.groupby(['GENERO_INFERIDO', 'NUM_CAMP'])[TARGET].mean().reset_index()
+
+    plt.figure(figsize=(14, 6))
+    sns.lineplot(data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', marker='o', palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'})
+    
+    # Sombreado para Día de la Madre (Campañas 4, 5, 6)
+    plt.axvspan(4, 6, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
+    
+    # Sombreado para Día del Padre (Campañas 8, 9, 10)
+    plt.axvspan(8, 10, color='blue', alpha=0.1, label='Temporada Día del Padre')
+    
+    # Sombreado para Fin de Año (Campañas 16, 17, 18)
+    plt.axvspan(16, 18, color='grey', alpha=0.1, label='Temporada Fin de Año')
+
+    plt.title(f"Estacionalidad de {TARGET} por Género y Festividades")
+    plt.xlabel("Número de Campaña (1 a 18)")
+    plt.ylabel(f"Promedio de {TARGET}")
+    plt.xticks(range(1, 19))
+    plt.legend(title='Género / Evento')
+    plt.tight_layout()
+    plt.show()
