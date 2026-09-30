@@ -49,7 +49,7 @@ def obtener_features_candidatas(factores_regionales):
             # temporales
             'CAMP_SEN', 'CAMP_COS',
             # momentum historico
-            'MOMENTUM_SUBGRUPO_LAG_3',
+            'MOMENTUM_SUBGRUPO_LAG_3', 'MOMENTUM_CLIMA_LAG_3', 'HHI_CLIMA_ORIGEN',
         ],
         'cat': ['SUBGRUPO', 'CATEGORIAS', 'GRUPO', 'CAMBIO_PAG_LADO', 'TIPO_REF',
                 # mezcla origen/destino (mismo patron que MODELO_AZZORTI_ROP_NAC_NAC)
@@ -331,3 +331,52 @@ def calcular_momentum_subgrupo(df, col_camp='CAMP', col_subgrupo='SUBGRUPO', col
     return df
 
 
+def calcular_momentum_clima(df, col_camp='CAMP', col_clima='CLIMA', col_target='RATIO_FACTOR', ventanas=(3,)):
+    """
+    Calcula el momentum historico (promedio movil) del target para cada CLIMA,
+    usando estrictamente campanas anteriores (shift) para evitar Data Leak.
+    """
+    df = df.copy()
+    if col_clima not in df.columns:
+        return df
+        
+    agg_hist = df.groupby([col_clima, col_camp])[col_target].mean().reset_index()
+    agg_hist = agg_hist.sort_values([col_clima, col_camp])
+    
+    for v in ventanas:
+        col_name = f'MOMENTUM_CLIMA_LAG_{v}'
+        agg_hist[col_name] = agg_hist.groupby(col_clima)[col_target].transform(
+            lambda x: x.shift(1).rolling(window=v, min_periods=1).mean()
+        )
+    
+    cols_a_unir = [col_clima, col_camp] + [f'MOMENTUM_CLIMA_LAG_{v}' for v in ventanas]
+    df = pd.merge(df, agg_hist[cols_a_unir], on=[col_clima, col_camp], how='left')
+    
+    promedio_por_campana = df.groupby(col_camp)[col_target].mean().sort_index()
+    promedio_acumulado_seguro = promedio_por_campana.shift(1).expanding().mean()
+    promedio_seguro_mapeado = df[col_camp].map(promedio_acumulado_seguro).fillna(1.0)
+    
+    for v in ventanas:
+        col_name = f'MOMENTUM_CLIMA_LAG_{v}'
+        df[col_name] = df[col_name].fillna(promedio_seguro_mapeado)
+        
+    return df
+
+
+def calcular_hhi_clima_origen(df, col_camp_destino='CAMP', col_clima='CLIMA', col_demanda_origen='FACT_ADV_RGN'):
+    """
+    Calcula el HHI (Indice de Herfindahl-Hirschman) de la demanda en el pais de origen
+    para cada grupo de (Campana_Destino, Clima). 
+    """
+    df = df.copy()
+    if col_clima not in df.columns or col_demanda_origen not in df.columns:
+        return df
+        
+    def _hhi(x):
+        s = x.sum()
+        return ((x / s)**2).sum() if s > 0 else 1.0
+
+    df['HHI_CLIMA_ORIGEN'] = df.groupby([col_camp_destino, col_clima])[col_demanda_origen].transform(_hhi)
+    df['HHI_CLIMA_ORIGEN'] = df['HHI_CLIMA_ORIGEN'].fillna(1.0)
+    
+    return df

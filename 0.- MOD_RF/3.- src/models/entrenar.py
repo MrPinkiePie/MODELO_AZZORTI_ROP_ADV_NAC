@@ -44,7 +44,7 @@ from features.construir_features import (construir_features_competencia, calcula
                                           calcular_ratio_factor, calcular_resumen_factores_regionales,
                                           marcar_tipo_referencia, calcular_exposicion,
                                           calcular_variables_ciclicas_campana,calcular_momentum_subgrupo,
-                                          agregar_clima_subgrupo,
+                                          agregar_clima_subgrupo, calcular_momentum_clima, calcular_hhi_clima_origen,
                                           obtener_features_candidatas)
 from models.entrenamiento_utils import (dividir_train_test_por_corte, armar_x_y,
                                          seleccionar_features_boruta, construir_objetivo_optuna,
@@ -90,7 +90,8 @@ FEATURES_FIJAS = {
             'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN',
             'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO',
             'PAG_NAC_NEW', 'PAG_ADV_IN',
-            'CAMP_SEN', 'CAMP_COS','MOMENTUM_SUBGRUPO_LAG_3'],
+            'CAMP_SEN', 'CAMP_COS','MOMENTUM_SUBGRUPO_LAG_3',
+            'MOMENTUM_CLIMA_LAG_3', 'HHI_CLIMA_ORIGEN'],
     'cat': ['NUM_CAMP_MIX', 'SUBGRUPO', 'CATEGORIAS', 'CLIMA'],
 }
 
@@ -445,6 +446,8 @@ DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
 # AGREGAR CLIMA AQUI ANTES DE EXPORTAR
 ruta_clima = DATA_PROCESSED / 'clasi_subg 8.xlsx'
 datos_finales = agregar_clima_subgrupo(datos_finales, ruta_clima)
+datos_finales = calcular_momentum_clima(datos_finales, ventanas=(3,))
+datos_finales = calcular_hhi_clima_origen(datos_finales)
 
 datos_finales.to_parquet(DATA_PROCESSED / 'df_limpio.parquet', index=False, compression='snappy')
 resumen_filas(datos_finales, 'df_limpio.parquet exportado (train+test)')
