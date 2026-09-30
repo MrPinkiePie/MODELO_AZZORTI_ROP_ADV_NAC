@@ -26,9 +26,13 @@ print(f"Dataset cargado: {df.shape[0]:,} filas y {df.shape[1]} columnas.")
 # TARGET_VISUAL: usamos la escala real para visualizar la estacionalidad claramente
 TARGET = 'RATIO_FACTOR'
 
-# Verificar columnas de tiempo (ANIO, NUM_CAMP, CAMP)
-if 'NUM_CAMP' not in df.columns or 'ANIO' not in df.columns:
+# Asegurarnos de que NUM_CAMP sea numérico para que el eje X se ordene correctamente
+if 'NUM_CAMP' in df.columns:
+    df['NUM_CAMP'] = df['NUM_CAMP'].astype(int)
+else:
     df['NUM_CAMP'] = df['CAMP'].astype(str).str[-2:].astype(int)
+
+if 'ANIO' not in df.columns:
     df['ANIO'] = df['CAMP'].astype(str).str[:4].astype(int)
 
 # Crear variable de Género Inferido si no existe
@@ -46,6 +50,7 @@ if 'GENERO_INFERIDO' not in df.columns and 'CATEGORIAS' in df.columns:
 print("\n--- 1. Estacionalidad Promedio por Campaña y Año ---")
 # Agrupamos por año y número de campaña para sacar el promedio del ratio
 df_season = df.groupby(['ANIO', 'NUM_CAMP'])[TARGET].mean().reset_index()
+df_season = df_season.sort_values(by=['ANIO', 'NUM_CAMP'])
 
 plt.figure(figsize=(12, 6))
 sns.lineplot(data=df_season, x='NUM_CAMP', y=TARGET, hue='ANIO', marker='o', palette='tab10')
@@ -69,22 +74,25 @@ if len(df_ts) >= 36:
     # Period=18 porque hay 18 campañas en un año
     result = seasonal_decompose(df_ts.values, model='additive', period=18)
     
+    # Creamos un eje X continuo (0, 1, 2...) para evitar los "huecos" numéricos entre 202418 y 202501
+    x_axis = range(len(df_ts))
+    
     fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
-    axes[0].plot(df_ts.index, df_ts.values, label='Original')
+    axes[0].plot(x_axis, df_ts.values, label='Original')
     axes[0].legend(loc='upper left')
     axes[0].set_title("Serie de Tiempo Original (Promedio por Campaña)")
     
-    axes[1].plot(df_ts.index, result.trend, label='Tendencia', color='orange')
+    axes[1].plot(x_axis, result.trend, label='Tendencia', color='orange')
     axes[1].legend(loc='upper left')
     
-    axes[2].plot(df_ts.index, result.seasonal, label='Estacionalidad', color='green')
+    axes[2].plot(x_axis, result.seasonal, label='Estacionalidad', color='green')
     axes[2].legend(loc='upper left')
     
-    axes[3].plot(df_ts.index, result.resid, label='Residuos', color='red', marker='o', linestyle='none')
+    axes[3].plot(x_axis, result.resid, label='Residuos', color='red', marker='o', linestyle='none')
     axes[3].legend(loc='upper left')
     
-    # Reducir etiquetas del eje X para que no se amontonen
-    plt.xticks(ticks=range(0, len(df_ts), 6), labels=df_ts.index[::6], rotation=45)
+    # Reducir etiquetas del eje X para que no se amontonen, y mostrar el formato '202401'
+    plt.xticks(ticks=x_axis[::2], labels=df_ts.index.astype(str)[::2], rotation=45)
     plt.tight_layout()
     plt.show()
 else:
