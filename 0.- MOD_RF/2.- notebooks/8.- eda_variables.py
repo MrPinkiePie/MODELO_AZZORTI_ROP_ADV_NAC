@@ -72,11 +72,43 @@ if 'SUBGRUPO' in df.columns:
 
 # %%
 # -------------------------------------------------------------
-# SECCION 2: CORRELACIÓN LINEAL (HEATMAP)
+# SECCION 2: DISTRIBUCIÓN Y DISPERSIÓN DE LAS X's (OUTLIERS)
 # -------------------------------------------------------------
-print("\n--- 2. Mapa de Calor (Correlación Pearson) ---")
-# Filtramos solo numéricas
+print("\n--- 2. Análisis Univariado de las X's (Histogramas y Boxplots) ---")
 cols_numericas = df.select_dtypes(include=[np.number]).columns.tolist()
+excluir = ['CAMP', 'ANIO'] 
+cols_x = [c for c in cols_numericas if c not in excluir and c not in [TARGET_MODEL, TARGET_VISUAL]]
+
+# Elegimos las primeras 9 variables numéricas predictoras para ver su dispersión
+vars_to_plot = cols_x[:9] 
+
+# Histogramas para ver la distribución (asimetría, campana de Gauss)
+plt.figure(figsize=(15, 10))
+for i, col in enumerate(vars_to_plot, 1):
+    plt.subplot(3, 3, i)
+    sns.histplot(df[col], kde=True, color='skyblue', bins=30)
+    plt.title(f"Histograma: {col}", fontsize=10)
+    plt.xlabel("")
+plt.suptitle("Distribución de las X's principales (Asimetría)", fontsize=14, y=1.02)
+plt.tight_layout()
+plt.show()
+
+# Boxplots para ver dispersión pura y valores atípicos (Outliers)
+plt.figure(figsize=(15, 10))
+for i, col in enumerate(vars_to_plot, 1):
+    plt.subplot(3, 3, i)
+    sns.boxplot(y=df[col], color='lightgreen')
+    plt.title(f"Boxplot: {col}", fontsize=10)
+    plt.ylabel("")
+plt.suptitle("Dispersión de las X's principales (Outliers)", fontsize=14, y=1.02)
+plt.tight_layout()
+plt.show()
+
+# %%
+# -------------------------------------------------------------
+# SECCION 3: CORRELACIÓN LINEAL (HEATMAP)
+# -------------------------------------------------------------
+print("\n--- 3. Mapa de Calor (Correlación Pearson) ---")
 
 # Calculamos matriz de correlación (quitando columnas de IDs irrelevantes si existen)
 excluir = ['CAMP', 'ANIO'] 
@@ -110,9 +142,9 @@ plot_heatmap(df, cols_corr, TARGET_VISUAL, method='pearson')
 
 # %%
 # -------------------------------------------------------------
-# SECCION 3: MUTUAL INFORMATION (RELACIONES NO LINEALES)
+# SECCION 4: MUTUAL INFORMATION (RELACIONES NO LINEALES)
 # -------------------------------------------------------------
-print("\n--- 3. Mutual Information (Todas las Features) ---")
+print("\n--- 4. Mutual Information (Todas las Features) ---")
 # Mutual info requiere que no haya Nulos y maneja las categóricas si se codifican
 # Para este EDA rápido usaremos las numéricas que no sean target ni factores directos equivalentes
 df_mi = df.dropna(subset=[TARGET_MODEL] + cols_corr).copy()
@@ -136,10 +168,10 @@ if not X.empty:
     print(mi_series.head(5))
 
     # -------------------------------------------------------------
-    # SECCION 4: SCATTER PLOTS (LAS MEJORES VARIABLES)
+    # SECCION 5: SCATTER PLOTS (LAS MEJORES VARIABLES)
     # -------------------------------------------------------------
     top_vars = mi_series.head(3).index.tolist()
-    print(f"\n--- 4. Scatter Plots de las Mejores Variables ({top_vars}) ---")
+    print(f"\n--- 5. Scatter Plots de las Mejores Variables ({top_vars}) ---")
 
     for var in top_vars:
         plt.figure()
@@ -158,11 +190,11 @@ if not X.empty:
 
 # %%
 # -------------------------------------------------------------
-# SECCION 5: VARIABLES CLAVE DE NEGOCIO (PRECIO, ESTRATEGIA, HISTORIA)
+# SECCION 6: VARIABLES CLAVE DE NEGOCIO (PRECIO, ESTRATEGIA, HISTORIA)
 # -------------------------------------------------------------
-print("\n--- 5. Impacto de Variables de Negocio en la Demanda ---")
+print("\n--- 6. Impacto de Variables de Negocio en la Demanda ---")
 
-# 5.1 Impacto del Precio Relativo (RATIO_PRECIO)
+# 6.1 Impacto del Precio Relativo (RATIO_PRECIO)
 if 'RATIO_PRECIO' in df.columns:
     plt.figure(figsize=(10, 6))
     df_sample = df.sample(n=min(3000, len(df)), random_state=42)
@@ -174,7 +206,7 @@ if 'RATIO_PRECIO' in df.columns:
     plt.ylabel(TARGET_VISUAL)
     plt.show()
 
-# 5.2 Estrategia Mixta (ESTR_MIX)
+# 6.2 Estrategia Mixta (ESTR_MIX)
 if 'ESTR_MIX' in df.columns:
     plt.figure(figsize=(12, 6))
     orden = df.groupby('ESTR_MIX')[TARGET_VISUAL].median().sort_values(ascending=False).index
@@ -184,7 +216,7 @@ if 'ESTR_MIX' in df.columns:
     plt.tight_layout()
     plt.show()
 
-# 5.3 Ubicación en Catálogo (UBICACION_PAG_MIX)
+# 6.3 Ubicación en Catálogo (UBICACION_PAG_MIX)
 if 'UBICACION_PAG_MIX' in df.columns:
     plt.figure(figsize=(10, 5))
     orden = df.groupby('UBICACION_PAG_MIX')[TARGET_VISUAL].median().sort_values(ascending=False).index
@@ -193,7 +225,7 @@ if 'UBICACION_PAG_MIX' in df.columns:
     plt.tight_layout()
     plt.show()
 
-# 5.4 Tipo de Referencia (NUEVA vs CON_HISTORIA)
+# 6.4 Tipo de Referencia (NUEVA vs CON_HISTORIA)
 if 'TIPO_REF' in df.columns:
     plt.figure(figsize=(8, 5))
     sns.violinplot(data=df, x='TIPO_REF', y=TARGET_VISUAL, palette='Set1', inner='quartile')
