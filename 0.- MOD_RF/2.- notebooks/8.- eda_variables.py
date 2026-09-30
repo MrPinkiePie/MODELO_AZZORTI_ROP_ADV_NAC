@@ -76,9 +76,18 @@ if 'SUBGRUPO' in df.columns:
 # -------------------------------------------------------------
 print("\n--- 2. Mutual Information (Todas las Features) ---")
 # Mutual info requiere que no haya Nulos y maneja las categóricas si se codifican
-cols_numericas = df.select_dtypes(include=[np.number]).columns.tolist()
-excluir_mi = ['CAMP', 'ANIO', 'TOT_A']
-cols_mi = [c for c in cols_numericas if c not in excluir_mi and c not in [TARGET_MODEL, TARGET_VISUAL]]
+# Filtramos solo las variables predictoras (X) numéricas reales que usa el modelo 
+# (tomado de FEATURES_FIJAS['num'] en entrenar.py)
+features_fijas_num = [
+    'RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MEDIANA', 'FACTOR_MAX', 'FACTOR_MIN',
+    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'NUM_PRODUCTOS_POR_CATEGORIAS_ORIGEN',
+    'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN',
+    'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO',
+    'PAG_NAC_NEW', 'PAG_ADV_IN',
+    'CAMP_SEN', 'CAMP_COS', 'MOMENTUM_SUBGRUPO_LAG_3'
+]
+
+cols_mi = [c for c in features_fijas_num if c in df.columns]
 
 df_mi = df.dropna(subset=[TARGET_MODEL] + cols_mi).copy()
 X = df_mi[cols_mi].drop(columns=['FACTOR_RCP_DESTINO', 'FACTOR_RCP_ORIGEN', 'FAC_NAC', 'FACT_ADV_RGN'], errors='ignore')
@@ -141,9 +150,8 @@ plt.show()
 # -------------------------------------------------------------
 print("\n--- 4. Mapa de Calor (Correlación Pearson) ---")
 
-# Calculamos matriz de correlación (quitando columnas de IDs irrelevantes si existen)
-excluir = ['CAMP', 'ANIO', 'TOT_A'] 
-cols_corr = [c for c in cols_numericas if c not in excluir]
+# Usamos exactamente las mismas variables de FEATURES_FIJAS para el mapa de calor
+cols_corr = [c for c in features_fijas_num if c in df.columns]
 
 def plot_heatmap(df_data, columnas, target_col, method='pearson'):
     """Genera un mapa de calor dinámico sin barra lateral y con anotaciones."""
