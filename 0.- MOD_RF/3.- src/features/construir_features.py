@@ -53,10 +53,47 @@ def obtener_features_candidatas(factores_regionales):
         ],
         'cat': ['SUBGRUPO', 'CATEGORIAS', 'GRUPO', 'CAMBIO_PAG_LADO', 'TIPO_REF',
                 # mezcla origen/destino (mismo patron que MODELO_AZZORTI_ROP_NAC_NAC)
-                'ESTR_MIX', 'UBICACION_PAG_MIX', 'NUM_CAMP_MIX'],
+                'ESTR_MIX', 'UBICACION_PAG_MIX', 'NUM_CAMP_MIX', 'CLIMA'],
     }
 
-
+def agregar_clima_subgrupo(df, ruta_excel):
+    """
+    Agrega la variable CLIMA (FRIO, CALIDO, NEUTRO) basandose en el SUBGRUPO,
+    leyendo desde el excel externo.
+    """
+    from pathlib import Path
+    import pandas as pd
+    if not Path(ruta_excel).exists():
+        print(f"Advertencia: No se encontro el archivo de clima en {ruta_excel}. Se omitira la variable CLIMA.")
+        if 'CLIMA' not in df.columns:
+            df['CLIMA'] = 'SIN_CLIMA'
+        return df
+    
+    try:
+        df_clima = pd.read_excel(ruta_excel)
+        df_clima.columns = [str(c).strip().upper() for c in df_clima.columns]
+        
+        col_clima = None
+        for col in ['CLIMA', 'TEMPORADA', 'ESTACION', 'TIPO_CLIMA', 'CLASIFICACION']:
+            if col in df_clima.columns:
+                col_clima = col
+                break
+                
+        if 'SUBGRUPO' in df_clima.columns and col_clima:
+            df_clima = df_clima[['SUBGRUPO', col_clima]].drop_duplicates()
+            df_clima = df_clima.rename(columns={col_clima: 'CLIMA'})
+            df = pd.merge(df, df_clima, on='SUBGRUPO', how='left')
+            df['CLIMA'] = df['CLIMA'].fillna('SIN_CLIMA')
+        else:
+            print("Advertencia: No se encontro la columna SUBGRUPO o clasificacion en el Excel de Clima.")
+            if 'CLIMA' not in df.columns:
+                df['CLIMA'] = 'SIN_CLIMA'
+    except Exception as e:
+        print(f"Error procesando el Excel de clima: {e}")
+        if 'CLIMA' not in df.columns:
+            df['CLIMA'] = 'SIN_CLIMA'
+            
+    return df
 
 
 def construir_features_competencia(df, col_camp, col_pagina, col_precio, col_linea, sufijo, cols_extra_pagina=None):
