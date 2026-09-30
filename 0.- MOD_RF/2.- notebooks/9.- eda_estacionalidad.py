@@ -3,6 +3,7 @@ Análisis Exploratorio de Datos (EDA) sobre Estacionalidad del Target.
 Revisa el comportamiento de RATIO_FACTOR a lo largo del tiempo, por campaña, por año,
 y por festividades (Día de la Madre, Día del Padre).
 """
+# %%
 import sys
 from pathlib import Path
 import pandas as pd
@@ -44,6 +45,7 @@ if 'GENERO_INFERIDO' not in df.columns and 'CATEGORIAS' in df.columns:
         default='MIXTO / OTRO'
     )
 
+# %%
 # -------------------------------------------------------------
 # SECCION 1: ESTACIONALIDAD POR AÑO Y CAMPAÑA (LINEPLOT)
 # -------------------------------------------------------------
@@ -62,6 +64,7 @@ plt.legend(title='Año')
 plt.tight_layout()
 plt.show()
 
+# %%
 # -------------------------------------------------------------
 # SECCION 2: DESCOMPOSICIÓN ESTACIONAL (SEASONAL DECOMPOSE)
 # -------------------------------------------------------------
@@ -77,27 +80,39 @@ if len(df_ts) >= 36:
     # Creamos un eje X continuo (0, 1, 2...) para evitar los "huecos" numéricos entre 202418 y 202501
     x_axis = range(len(df_ts))
     
-    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
-    axes[0].plot(x_axis, df_ts.values, label='Original')
-    axes[0].legend(loc='upper left')
-    axes[0].set_title("Serie de Tiempo Original (Promedio por Campaña)")
+    # Grid 2x2
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10))
     
-    axes[1].plot(x_axis, result.trend, label='Tendencia', color='orange')
-    axes[1].legend(loc='upper left')
+    # 1. Original (Top-Left)
+    axes[0, 0].plot(x_axis, df_ts.values, label='Original')
+    axes[0, 0].set_title("1. Serie de Tiempo Original")
+    axes[0, 0].set_xticks(x_axis[::4])
+    axes[0, 0].set_xticklabels(df_ts.index.astype(str)[::4], rotation=45)
     
-    axes[2].plot(x_axis, result.seasonal, label='Estacionalidad', color='green')
-    axes[2].legend(loc='upper left')
+    # 2. Tendencia (Top-Right)
+    axes[0, 1].plot(x_axis, result.trend, label='Tendencia', color='orange')
+    axes[0, 1].set_title("2. Tendencia (Trend) - Media Móvil")
+    axes[0, 1].set_xticks(x_axis[::4])
+    axes[0, 1].set_xticklabels(df_ts.index.astype(str)[::4], rotation=45)
     
-    axes[3].plot(x_axis, result.resid, label='Residuos', color='red', marker='o', linestyle='none')
-    axes[3].legend(loc='upper left')
+    # 3. Estacionalidad (Bottom-Left)
+    axes[1, 0].plot(x_axis, result.seasonal, label='Estacionalidad', color='green')
+    axes[1, 0].set_title("3. Estacionalidad (Pura)")
+    axes[1, 0].set_xticks(x_axis[::4])
+    axes[1, 0].set_xticklabels(df_ts.index.astype(str)[::4], rotation=45)
     
-    # Reducir etiquetas del eje X para que no se amontonen, y mostrar el formato '202401'
-    plt.xticks(ticks=x_axis[::2], labels=df_ts.index.astype(str)[::2], rotation=45)
+    # 4. Residuos (Bottom-Right)
+    axes[1, 1].plot(x_axis, result.resid, label='Residuos', color='red', marker='o', linestyle='none')
+    axes[1, 1].set_title("4. Residuos (Anomalías)")
+    axes[1, 1].set_xticks(x_axis[::4])
+    axes[1, 1].set_xticklabels(df_ts.index.astype(str)[::4], rotation=45)
+    
     plt.tight_layout()
     plt.show()
 else:
     print(f"No hay suficientes campañas ({len(df_ts)}) para hacer seasonal_decompose con period=18. Se necesitan al menos 36.")
 
+# %%
 # -------------------------------------------------------------
 # SECCION 3: EVENTOS ESPECIALES (DIA DE LA MADRE Y PADRE) POR GÉNERO
 # -------------------------------------------------------------

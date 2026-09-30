@@ -2,6 +2,7 @@
 Análisis Exploratorio de Datos (EDA) sobre el dataset final consolidado de Features vs Target.
 Usa df_limpio.parquet que ya contiene el target (LOG_RATIO_FACTOR) cruzado con todas las X (features numéricas y categóricas).
 """
+# %%
 import sys
 from pathlib import Path
 import pandas as pd
@@ -27,6 +28,7 @@ print(f"Dataset cargado: {df.shape[0]:,} filas y {df.shape[1]} columnas.")
 TARGET_MODEL = 'LOG_RATIO_FACTOR'
 TARGET_VISUAL = 'RATIO_FACTOR'
 
+# %%
 # -------------------------------------------------------------
 # SECCION 1: ANÁLISIS DE LA VARIABLE OBJETIVO
 # -------------------------------------------------------------
@@ -68,6 +70,7 @@ if 'SUBGRUPO' in df.columns:
         plt.tight_layout()
         plt.show()
 
+# %%
 # -------------------------------------------------------------
 # SECCION 2: CORRELACIÓN LINEAL (HEATMAP)
 # -------------------------------------------------------------
@@ -105,6 +108,7 @@ plot_heatmap(df, cols_corr, TARGET_VISUAL, method='pearson')
 # Si quieres ver Spearman, simplemente descomenta la siguiente línea:
 # plot_heatmap(df, cols_corr, TARGET_VISUAL, method='spearman')
 
+# %%
 # -------------------------------------------------------------
 # SECCION 3: MUTUAL INFORMATION (RELACIONES NO LINEALES)
 # -------------------------------------------------------------
