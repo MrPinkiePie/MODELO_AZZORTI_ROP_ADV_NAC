@@ -155,3 +155,48 @@ if not X.empty:
                     
         plt.title(f"Relación y Tendencia: {var} vs {TARGET_VISUAL}")
         plt.show()
+
+# %%
+# -------------------------------------------------------------
+# SECCION 5: VARIABLES CLAVE DE NEGOCIO (PRECIO, ESTRATEGIA, HISTORIA)
+# -------------------------------------------------------------
+print("\n--- 5. Impacto de Variables de Negocio en la Demanda ---")
+
+# 5.1 Impacto del Precio Relativo (RATIO_PRECIO)
+if 'RATIO_PRECIO' in df.columns:
+    plt.figure(figsize=(10, 6))
+    df_sample = df.sample(n=min(3000, len(df)), random_state=42)
+    sns.regplot(data=df_sample, x='RATIO_PRECIO', y=TARGET_VISUAL, 
+                scatter_kws={'alpha': 0.3, 'color': 'navy'},
+                line_kws={'color': 'darkorange'}, lowess=True)
+    plt.title(f"Impacto del Precio Relativo en el Factor\n(RATIO_PRECIO vs {TARGET_VISUAL})")
+    plt.xlabel("RATIO_PRECIO (Precio Destino / Precio Origen)")
+    plt.ylabel(TARGET_VISUAL)
+    plt.show()
+
+# 5.2 Estrategia Mixta (ESTR_MIX)
+if 'ESTR_MIX' in df.columns:
+    plt.figure(figsize=(12, 6))
+    orden = df.groupby('ESTR_MIX')[TARGET_VISUAL].median().sort_values(ascending=False).index
+    sns.boxplot(data=df, x='ESTR_MIX', y=TARGET_VISUAL, order=orden, palette='Set3')
+    plt.xticks(rotation=45, ha='right', fontsize=9)
+    plt.title(f"Distribución del Factor por Estrategia de Venta (ESTR_MIX)")
+    plt.tight_layout()
+    plt.show()
+
+# 5.3 Ubicación en Catálogo (UBICACION_PAG_MIX)
+if 'UBICACION_PAG_MIX' in df.columns:
+    plt.figure(figsize=(10, 5))
+    orden = df.groupby('UBICACION_PAG_MIX')[TARGET_VISUAL].median().sort_values(ascending=False).index
+    sns.boxplot(data=df, x='UBICACION_PAG_MIX', y=TARGET_VISUAL, order=orden, palette='Pastel1')
+    plt.title(f"Impacto de la Ubicación en el Catálogo")
+    plt.tight_layout()
+    plt.show()
+
+# 5.4 Tipo de Referencia (NUEVA vs CON_HISTORIA)
+if 'TIPO_REF' in df.columns:
+    plt.figure(figsize=(8, 5))
+    sns.violinplot(data=df, x='TIPO_REF', y=TARGET_VISUAL, palette='Set1', inner='quartile')
+    plt.title(f"Comparación del Factor: Productos Nuevos vs Con Historia")
+    plt.tight_layout()
+    plt.show()
