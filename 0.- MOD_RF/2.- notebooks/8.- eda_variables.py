@@ -230,7 +230,7 @@ if 'UBICACION_PAG_MIX' in df.columns:
 # 6.4 Tipo de Referencia (NUEVA vs CON_HISTORIA)
 if 'TIPO_REF' in df.columns:
     plt.figure(figsize=(8, 5))
-    sns.violinplot(data=df, x='TIPO_REF', y=TARGET_VISUAL, palette='Set1', inner='quartile')
+    sns.boxplot(data=df, x='TIPO_REF', y=TARGET_VISUAL, palette='Set1')
     plt.title(f"Comparación del Factor: Productos Nuevos vs Con Historia")
     plt.tight_layout()
     plt.show()
