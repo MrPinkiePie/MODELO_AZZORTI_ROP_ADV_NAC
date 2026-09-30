@@ -56,7 +56,7 @@ usar_boruta = False  # True para reducir variables con Boruta antes de Optuna
 max_iter = 100        # iteraciones de Boruta: bajarlo reduce el tiempo, a costa de una seleccion menos estable
 
 usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna
-n_trials = 10        # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
+n_trials = 50        # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
 
 
 comentario = f'{COMENTARIO_REG} TALLAS'

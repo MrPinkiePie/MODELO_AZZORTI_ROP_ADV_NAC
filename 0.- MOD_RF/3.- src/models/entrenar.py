@@ -629,9 +629,18 @@ nombre_archivo_pruebas = f'df_{pais_origen}_{pais_destino}_{linea}_{comentario}.
 df_final.to_csv(PRUEBAS_MODELO_DIR / nombre_archivo_pruebas, index=False, encoding='cp1252')
 resumen_filas(df_final, f'exportado PRUEBAS_MODELO/{nombre_archivo_pruebas}')
 
-# NUEVO: Conteo de Referencias por Campaña para Auditoría (DSB)
-df_auditoria = df_final.groupby('CAMP')['NOMBRE_SAP'].nunique().reset_index()
-df_auditoria.rename(columns={'NOMBRE_SAP': 'CANTIDAD_REFERENCIAS'}, inplace=True)
+# NUEVO: Conteo de Referencias y SKUs por Campaña para Auditoría (DSB)
+agg_funcs = {'NOMBRE_SAP': 'nunique'}
+if 'N_SKU' in df_final.columns:
+    agg_funcs['N_SKU'] = 'sum'
+
+df_auditoria = df_final.groupby('CAMP').agg(agg_funcs).reset_index()
+
+rename_dict = {'NOMBRE_SAP': 'CANTIDAD_REFERENCIAS'}
+if 'N_SKU' in df_final.columns:
+    rename_dict['N_SKU'] = 'CANTIDAD_SKUS'
+    
+df_auditoria.rename(columns=rename_dict, inplace=True)
 nombre_archivo_auditoria = f'Auditoria_Cantidades_{pais_origen}_{pais_destino}_{linea}_{comentario}.xlsx'
 excel_dir = Path(__file__).resolve().parents[2] / '5.- reports' / 'excel'
 excel_dir.mkdir(parents=True, exist_ok=True)
