@@ -140,3 +140,51 @@ if 'GENERO_INFERIDO' in df.columns:
     plt.legend(title='Género / Evento')
     plt.tight_layout()
     plt.show()
+
+# %%
+# -------------------------------------------------------------
+# SECCION 4: ESTACIONALIDAD CLIMÁTICA (CON ARCHIVO EXTERNO)
+# -------------------------------------------------------------
+print("\n--- 4. Efecto de Estacionalidad Climática ---")
+ruta_clima = DATA_PROCESSED / 'clasi_subg 8.xlsx'
+
+if ruta_clima.exists():
+    try:
+        print(f"Cargando archivo de clima: {ruta_clima.name}")
+        df_clima = pd.read_excel(ruta_clima)
+        print("Columnas en el archivo de clima:", df_clima.columns.tolist())
+        
+        # Asumimos que hay una columna 'SUBGRUPO' y una 'CLIMA' o 'TEMPORADA'
+        # Convertimos las columnas a mayúsculas para evitar problemas de case
+        df_clima.columns = [str(c).strip().upper() for c in df_clima.columns]
+        
+        # Buscar la columna que contenga la clasificación de clima (Ej: CLIMA, TEMPORADA, ESTACION)
+        col_clima = None
+        for col in ['CLIMA', 'TEMPORADA', 'ESTACION', 'TIPO_CLIMA', 'CLASIFICACION']:
+            if col in df_clima.columns:
+                col_clima = col
+                break
+                
+        # Asegurarnos de que exista la columna SUBGRUPO
+        if 'SUBGRUPO' in df_clima.columns and col_clima:
+            print(f"Cruzando dataset con columna de clima '{col_clima}'...")
+            df_con_clima = pd.merge(df, df_clima[['SUBGRUPO', col_clima]], on='SUBGRUPO', how='inner')
+            
+            # Agrupar y graficar
+            df_clima_season = df_con_clima.groupby([col_clima, 'NUM_CAMP'])[TARGET].mean().reset_index()
+            
+            plt.figure(figsize=(14, 6))
+            sns.lineplot(data=df_clima_season, x='NUM_CAMP', y=TARGET, hue=col_clima, marker='s', linewidth=2)
+            plt.title(f"Estacionalidad de {TARGET} por Tipo de Clima / Temporada")
+            plt.xlabel("Número de Campaña (1 a 18)")
+            plt.ylabel(f"Promedio de {TARGET}")
+            plt.xticks(range(1, 19))
+            plt.legend(title='Clima / Temporada')
+            plt.tight_layout()
+            plt.show()
+        else:
+            print("No se encontró la columna 'SUBGRUPO' o una columna de Clima/Temporada en el Excel.")
+    except Exception as e:
+        print(f"Error procesando el Excel de clima: {e}")
+else:
+    print(f"El archivo {ruta_clima} no se encontró en la carpeta procesada.")
