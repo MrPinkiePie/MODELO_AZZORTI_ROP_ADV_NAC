@@ -74,7 +74,7 @@ if 'SUBGRUPO' in df.columns:
         plt.figure(figsize=(8, 5))
         orden_gen = df.groupby('GENERO_INFERIDO')[TARGET_VISUAL].median().sort_values().index
         sns.boxplot(data=df, x='GENERO_INFERIDO', y=TARGET_VISUAL, order=orden_gen, palette='Set2')
-        plt.title("Distribución del Target (RATIO_FACTOR) según GÉNERO INFERIDO")
+        plt.title("Distribución del Target (RATIO_FACTOR) según GÉNERO")
         plt.tight_layout()
         plt.show()
 
@@ -92,7 +92,8 @@ features_fijas_num = [
     'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN',
     'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO',
     'PAG_NAC_NEW', 'PAG_ADV_IN',
-    'CAMP_SEN', 'CAMP_COS', 'MOMENTUM_SUBGRUPO_LAG_3'
+    'CAMP_SEN', 'CAMP_COS', 'MOMENTUM_SUBGRUPO_LAG_3',
+    'MOMENTUM_CLIMA_LAG_3', 'HHI_CLIMA_ORIGEN'
 ]
 
 cols_mi = [c for c in features_fijas_num if c in df.columns]
@@ -158,8 +159,10 @@ plt.show()
 # -------------------------------------------------------------
 print("\n--- 4. Mapa de Calor (Correlación Pearson) ---")
 
-# Usamos exactamente las mismas variables de FEATURES_FIJAS para el mapa de calor
+# Añadimos TARGET_MODEL a la lista para el heatmap como pidió el usuario
 cols_corr = [c for c in features_fijas_num if c in df.columns]
+if TARGET_VISUAL in df.columns:
+    cols_corr.append(TARGET_VISUAL)
 
 def plot_heatmap(df_data, columnas, target_col, method='pearson'):
     """Genera un mapa de calor dinámico sin barra lateral y con anotaciones."""
