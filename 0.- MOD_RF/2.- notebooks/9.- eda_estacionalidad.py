@@ -36,7 +36,14 @@ else:
 if 'ANIO' not in df.columns:
     df['ANIO'] = df['CAMP'].astype(str).str[:4].astype(int)
 
-# Eliminar la inferencia de género, usaremos CATEGORIAS directamente
+# Crear variable de Género Inferido si no existe
+if 'GENERO_INFERIDO' not in df.columns and 'CATEGORIAS' in df.columns:
+    cat_str = df['CATEGORIAS'].astype(str).str.upper()
+    df['GENERO_INFERIDO'] = np.select(
+        [cat_str.str.contains('FEM'), cat_str.str.contains('MSC')], 
+        [f'FEMENINO', f'MASCULINO'], 
+        default='MIXTO / OTRO'
+    )
 
 # %%
 # -------------------------------------------------------------
@@ -137,6 +144,34 @@ if 'CATEGORIAS' in df.columns:
     plt.ylabel(f"Promedio de {TARGET}")
     plt.xticks(range(1, 19))
     plt.legend(title='Categoría / Evento')
+    plt.tight_layout()
+    plt.show()
+
+# -------------------------------------------------------------
+# SECCION 3B: EVENTOS ESPECIALES (DIA DE LA MADRE Y PADRE) POR GÉNERO INFERIDO
+# -------------------------------------------------------------
+print("\n--- 3B. Efecto de Festividades por Género (Agrupado) ---")
+if 'GENERO_INFERIDO' in df.columns:
+    df_gender = df[df['GENERO_INFERIDO'].isin(['FEMENINO', 'MASCULINO'])]
+    df_gender_season = df_gender.groupby(['GENERO_INFERIDO', 'NUM_CAMP'])[TARGET].mean().reset_index()
+
+    plt.figure(figsize=(14, 6))
+    sns.lineplot(data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', marker='o', palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'})
+    
+    # Sombreado para Día de la Madre (Campañas 4, 5, 6)
+    plt.axvspan(4, 6, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
+    
+    # Sombreado para Día del Padre (Campañas 8, 9, 10)
+    plt.axvspan(8, 10, color='blue', alpha=0.1, label='Temporada Día del Padre')
+    
+    # Sombreado para Fin de Año (Campañas 16, 17, 18)
+    plt.axvspan(16, 18, color='grey', alpha=0.1, label='Temporada Fin de Año')
+
+    plt.title(f"Estacionalidad de {TARGET} por Género Inferido y Festividades")
+    plt.xlabel("Número de Campaña (1 a 18)")
+    plt.ylabel(f"Promedio de {TARGET}")
+    plt.xticks(range(1, 19))
+    plt.legend(title='Género / Evento')
     plt.tight_layout()
     plt.show()
 

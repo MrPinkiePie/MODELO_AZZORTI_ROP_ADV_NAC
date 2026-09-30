@@ -59,6 +59,24 @@ if 'SUBGRUPO' in df.columns:
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
         plt.show()
+        
+        # 1.1 Inferir Género (Femenino / Masculino / Otro) desde CATEGORIAS
+        cat_str = df['CATEGORIAS'].astype(str).str.upper()
+        cond_fem = cat_str.str.contains('FEM')
+        cond_msc = cat_str.str.contains('MSC')
+        
+        df['GENERO_INFERIDO'] = np.select(
+            [cond_fem, cond_msc], 
+            ['FEMENINO', 'MASCULINO'], 
+            default='MIXTO / OTRO'
+        )
+        
+        plt.figure(figsize=(8, 5))
+        orden_gen = df.groupby('GENERO_INFERIDO')[TARGET_VISUAL].median().sort_values().index
+        sns.boxplot(data=df, x='GENERO_INFERIDO', y=TARGET_VISUAL, order=orden_gen, palette='Set2')
+        plt.title("Distribución del Target (RATIO_FACTOR) según GÉNERO INFERIDO")
+        plt.tight_layout()
+        plt.show()
 
 # %%
 # -------------------------------------------------------------
