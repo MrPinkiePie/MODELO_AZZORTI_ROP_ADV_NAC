@@ -72,15 +72,46 @@ if 'SUBGRUPO' in df.columns:
 
 # %%
 # -------------------------------------------------------------
-# SECCION 2: DISTRIBUCIÓN Y DISPERSIÓN DE LAS X's (OUTLIERS)
+# SECCION 2: MUTUAL INFORMATION (RELACIONES NO LINEALES)
 # -------------------------------------------------------------
-print("\n--- 2. Análisis Univariado de las X's (Histogramas y Boxplots) ---")
+print("\n--- 2. Mutual Information (Todas las Features) ---")
+# Mutual info requiere que no haya Nulos y maneja las categóricas si se codifican
 cols_numericas = df.select_dtypes(include=[np.number]).columns.tolist()
-excluir = ['CAMP', 'ANIO'] 
-cols_x = [c for c in cols_numericas if c not in excluir and c not in [TARGET_MODEL, TARGET_VISUAL]]
+excluir_mi = ['CAMP', 'ANIO', 'TOT_A']
+cols_mi = [c for c in cols_numericas if c not in excluir_mi and c not in [TARGET_MODEL, TARGET_VISUAL]]
 
-# Elegimos las primeras 9 variables numéricas predictoras para ver su dispersión
-vars_to_plot = cols_x[:9] 
+df_mi = df.dropna(subset=[TARGET_MODEL] + cols_mi).copy()
+X = df_mi[cols_mi].drop(columns=['FACTOR_RCP_DESTINO', 'FACTOR_RCP_ORIGEN', 'FAC_NAC', 'FACT_ADV_RGN'], errors='ignore')
+y = df_mi[TARGET_MODEL] # MI se calcula contra el target de entrenamiento
+
+if not X.empty:
+    from sklearn.feature_selection import mutual_info_regression
+    mi_scores = mutual_info_regression(X, y, random_state=42)
+    mi_series = pd.Series(mi_scores, index=X.columns).sort_values(ascending=False)
+
+    plt.figure(figsize=(10, 6))
+    mi_series.plot(kind='bar', color='teal')
+    plt.title("Mutual Information (Dependencia no lineal) contra Target")
+    plt.ylabel("Score MI")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+    print("Top 5 variables con mayor Mutual Information:")
+    print(mi_series.head(5))
+
+    # Elegiremos el Top 9 para el análisis de dispersión posterior
+    top_vars_9 = mi_series.head(9).index.tolist()
+else:
+    top_vars_9 = cols_mi[:9]
+
+# %%
+# -------------------------------------------------------------
+# SECCION 3: DISTRIBUCIÓN Y DISPERSIÓN DE LAS X's (OUTLIERS)
+# -------------------------------------------------------------
+print("\n--- 3. Análisis Univariado de las X's (Histogramas y Boxplots) ---")
+
+vars_to_plot = top_vars_9 
 
 # Histogramas para ver la distribución (asimetría, campana de Gauss)
 plt.figure(figsize=(15, 10))
@@ -89,7 +120,7 @@ for i, col in enumerate(vars_to_plot, 1):
     sns.histplot(df[col], kde=True, color='skyblue', bins=30)
     plt.title(f"Histograma: {col}", fontsize=10)
     plt.xlabel("")
-plt.suptitle("Distribución de las X's principales (Asimetría)", fontsize=14, y=1.02)
+plt.suptitle("Distribución del Top 9 Variables (por Mutual Info)", fontsize=14, y=1.02)
 plt.tight_layout()
 plt.show()
 
@@ -100,15 +131,15 @@ for i, col in enumerate(vars_to_plot, 1):
     sns.boxplot(y=df[col], color='lightgreen')
     plt.title(f"Boxplot: {col}", fontsize=10)
     plt.ylabel("")
-plt.suptitle("Dispersión de las X's principales (Outliers)", fontsize=14, y=1.02)
+plt.suptitle("Dispersión del Top 9 Variables (por Mutual Info)", fontsize=14, y=1.02)
 plt.tight_layout()
 plt.show()
 
 # %%
 # -------------------------------------------------------------
-# SECCION 3: CORRELACIÓN LINEAL (HEATMAP)
+# SECCION 4: CORRELACIÓN LINEAL (HEATMAP)
 # -------------------------------------------------------------
-print("\n--- 3. Mapa de Calor (Correlación Pearson) ---")
+print("\n--- 4. Mapa de Calor (Correlación Pearson) ---")
 
 # Calculamos matriz de correlación (quitando columnas de IDs irrelevantes si existen)
 excluir = ['CAMP', 'ANIO', 'TOT_A'] 
@@ -143,49 +174,19 @@ plot_heatmap(df, cols_corr, TARGET_VISUAL, method='pearson')
 
 # %%
 # -------------------------------------------------------------
-# SECCION 4: MUTUAL INFORMATION (RELACIONES NO LINEALES)
+# SECCION 5: SCATTER PLOTS (LAS MEJORES VARIABLES)
 # -------------------------------------------------------------
-print("\n--- 4. Mutual Information (Todas las Features) ---")
-# Mutual info requiere que no haya Nulos y maneja las categóricas si se codifican
-# Para este EDA rápido usaremos las numéricas que no sean target ni factores directos equivalentes
-df_mi = df.dropna(subset=[TARGET_MODEL] + cols_corr).copy()
-X = df_mi[cols_corr].drop(columns=[TARGET_MODEL, TARGET_VISUAL, 'FACTOR_RCP_DESTINO', 'FACTOR_RCP_ORIGEN'], errors='ignore')
-y = df_mi[TARGET_MODEL] # MI se calcula contra el target de entrenamiento
-
-if not X.empty:
-    # Calcular Mutual Information
-    mi_scores = mutual_info_regression(X, y, random_state=42)
-    mi_series = pd.Series(mi_scores, index=X.columns).sort_values(ascending=False)
-
-    plt.figure(figsize=(10, 6))
-    mi_series.plot(kind='bar', color='teal')
-    plt.title("Mutual Information (Dependencia no lineal) contra Target")
-    plt.ylabel("Score MI")
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    plt.show()
-
-    print("Top 5 variables con mayor Mutual Information:")
-    print(mi_series.head(5))
-
-    # -------------------------------------------------------------
-    # SECCION 5: SCATTER PLOTS (LAS MEJORES VARIABLES)
-    # -------------------------------------------------------------
+# Usaremos el top 3 del Mutual Information calculado en la Seccion 2
+if 'mi_series' in locals():
     top_vars = mi_series.head(3).index.tolist()
     print(f"\n--- 5. Scatter Plots de las Mejores Variables ({top_vars}) ---")
 
     for var in top_vars:
         plt.figure()
-        # Usamos sample si son demasiados puntos
         df_sample = df.sample(n=min(3000, len(df)), random_state=42)
-        
-        # Usamos regplot en lugar de scatterplot para tener una linea de tendencia.
-        # lowess=True ajusta una curva flexible a los datos (ideal si la relación no es una recta perfecta)
-        # scatter_kws aplica transparencia a los puntos para ver densidad.
         sns.regplot(data=df_sample, x=var, y=TARGET_VISUAL, 
                     scatter_kws={'alpha': 0.3, 'color': 'purple'},
                     line_kws={'color': 'red'}, lowess=True)
-                    
         plt.title(f"Relación y Tendencia: {var} vs {TARGET_VISUAL}")
         plt.show()
 
