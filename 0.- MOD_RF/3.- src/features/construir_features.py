@@ -82,8 +82,14 @@ def agregar_clima_subgrupo(df, ruta_excel):
         if 'SUBGRUPO' in df_clima.columns and col_clima:
             df_clima = df_clima[['SUBGRUPO', col_clima]].drop_duplicates()
             df_clima = df_clima.rename(columns={col_clima: 'CLIMA'})
-            df = pd.merge(df, df_clima, on='SUBGRUPO', how='left')
+            
+            # Normalizar SUBGRUPO quitando todos los espacios para evitar errores de tipeo
+            df['SUBGRUPO_NORM'] = df['SUBGRUPO'].astype(str).str.replace(' ', '').str.upper()
+            df_clima['SUBGRUPO_NORM'] = df_clima['SUBGRUPO'].astype(str).str.replace(' ', '').str.upper()
+            
+            df = pd.merge(df, df_clima[['SUBGRUPO_NORM', 'CLIMA']], on='SUBGRUPO_NORM', how='left')
             df['CLIMA'] = df['CLIMA'].fillna('SIN_CLIMA')
+            df = df.drop(columns=['SUBGRUPO_NORM'])
         else:
             print("Advertencia: No se encontro la columna SUBGRUPO o clasificacion en el Excel de Clima.")
             if 'CLIMA' not in df.columns:
