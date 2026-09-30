@@ -111,7 +111,7 @@ plt.show()
 print("\n--- 3. Mapa de Calor (Correlación Pearson) ---")
 
 # Calculamos matriz de correlación (quitando columnas de IDs irrelevantes si existen)
-excluir = ['CAMP', 'ANIO'] 
+excluir = ['CAMP', 'ANIO', 'TOT_A'] 
 cols_corr = [c for c in cols_numericas if c not in excluir]
 
 def plot_heatmap(df_data, columnas, target_col, method='pearson'):
@@ -130,6 +130,7 @@ def plot_heatmap(df_data, columnas, target_col, method='pearson'):
     
     sns.heatmap(corr_matrix, cmap="coolwarm", center=0, annot=True, fmt=".2f", cbar=False, 
                 mask=mask, annot_kws={"size": 6}, linewidths=0.5)
+    plt.grid(False)  # Quitar el grid para no ensuciar la visualización
     plt.title(f"Mapa de Calor - Correlaciones ({method.capitalize()}) de Variables Numéricas")
     plt.xticks(rotation=45, ha='right', fontsize=8)
     plt.yticks(fontsize=8)
