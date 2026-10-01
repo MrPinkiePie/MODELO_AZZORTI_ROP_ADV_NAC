@@ -26,7 +26,7 @@ from joblib import dump
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from config import (PAIS_DESTINO, PAIS_ORIGEN, FACTORES_REGIONALES_POR_PAIS, LINEA, DESFASE_CAMPANAS, NOMBRE_PKL,
                     MODELS_DIR, PRUEBAS_MODELO_DIR, DATA_INTERIM, DATA_PROCESSED,
-                    CAMP_INI, CAMP_FIN, CORTE_TRAIN_TEST, COMENTARIO_REG,
+                    CAMP_INI, CAMP_INI_MODELO, CAMP_FIN, CORTE_TRAIN_TEST, COMENTARIO_REG,
                     TLL_ROOT, PRUEBAS_MODELO_TLL_DIR)
 from data.cargar_datos import (load_1_1, load_vehiculo_estrategia, load_inflados,
                                 leer_fct_adv_gp1, calcular_factores_adv_gp1, revisar_calidad_fct_adv_gp1,
