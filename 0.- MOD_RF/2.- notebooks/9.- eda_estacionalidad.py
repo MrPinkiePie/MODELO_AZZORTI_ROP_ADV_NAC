@@ -153,26 +153,25 @@ if 'CATEGORIAS' in df.columns:
 print("\n--- 3B. Efecto de Festividades por Género (Agrupado) ---")
 if 'GENERO_INFERIDO' in df.columns:
     df_gender = df[df['GENERO_INFERIDO'].isin(['FEMENINO', 'MASCULINO'])]
-    df_gender_season = df_gender.groupby(['GENERO_INFERIDO', 'NUM_CAMP'])[TARGET].mean().reset_index()
+    df_gender_season = df_gender.groupby(['ANIO', 'GENERO_INFERIDO', 'NUM_CAMP'])[TARGET].mean().reset_index()
 
-    plt.figure(figsize=(14, 6))
-    sns.lineplot(data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', marker='o', palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'})
+    g = sns.relplot(
+        data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', 
+        col='ANIO', col_wrap=3, kind='line', marker='o', 
+        palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'},
+        height=4, aspect=1.2
+    )
     
-    # Sombreado para Día de la Madre (Campañas 4 a 7)
-    plt.axvspan(4, 7, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
-    
-    # Sombreado para Día del Padre (Campañas 8, 9, 10)
-    plt.axvspan(8, 10, color='blue', alpha=0.1, label='Temporada Día del Padre')
-    
-    # Sombreado para Fin de Año (Campañas 16, 17, 18)
-    plt.axvspan(16, 18, color='grey', alpha=0.1, label='Temporada Fin de Año')
+    # Añadir sombreados y formatear cada subgráfico
+    for ax in g.axes.flat:
+        ax.axvspan(4, 7, color='magenta', alpha=0.1, label='Día de la Madre' if ax == g.axes.flat[-1] else "")
+        ax.axvspan(8, 10, color='blue', alpha=0.1, label='Día del Padre' if ax == g.axes.flat[-1] else "")
+        ax.axvspan(16, 18, color='grey', alpha=0.1, label='Fin de Año' if ax == g.axes.flat[-1] else "")
+        ax.set_xticks(range(1, 19))
+        ax.set_xlabel("Campaña")
+        ax.set_ylabel(f"Promedio {TARGET}")
 
-    plt.title(f"Estacionalidad de {TARGET} por Género y Festividades")
-    plt.xlabel("Número de Campaña (1 a 18)")
-    plt.ylabel(f"Promedio de {TARGET}")
-    plt.xticks(range(1, 19))
-    plt.legend(title='Género / Evento')
-    plt.tight_layout()
+    g.fig.suptitle(f"Estacionalidad de {TARGET} por Género y Festividades (Año a Año)", y=1.05)
     plt.show()
 
 # %%
@@ -187,16 +186,20 @@ if 'CLIMA' in df.columns:
         df.loc[subg_str.str.startswith('210'), 'CLIMA'] = 'NEUTRO'
         df.loc[subg_str.str.startswith('230') | subg_str.str.startswith('227'), 'CLIMA'] = 'CALIDO'
         
-    df_clima_season = df.groupby(['CLIMA', 'NUM_CAMP'])[TARGET].mean().reset_index()
+    df_clima_season = df.groupby(['ANIO', 'CLIMA', 'NUM_CAMP'])[TARGET].mean().reset_index()
     
-    plt.figure(figsize=(14, 6))
-    sns.lineplot(data=df_clima_season, x='NUM_CAMP', y=TARGET, hue='CLIMA', marker='s', linewidth=2)
-    plt.title(f"Estacionalidad de {TARGET} por Tipo de Clima / Temporada")
-    plt.xlabel("Número de Campaña (1 a 18)")
-    plt.ylabel(f"Promedio de {TARGET}")
-    plt.xticks(range(1, 19))
-    plt.legend(title='Clima')
-    plt.tight_layout()
+    g = sns.relplot(
+        data=df_clima_season, x='NUM_CAMP', y=TARGET, hue='CLIMA', 
+        col='ANIO', col_wrap=3, kind='line', marker='s', linewidth=2,
+        height=4, aspect=1.2
+    )
+    
+    for ax in g.axes.flat:
+        ax.set_xticks(range(1, 19))
+        ax.set_xlabel("Campaña")
+        ax.set_ylabel(f"Promedio {TARGET}")
+
+    g.fig.suptitle(f"Estacionalidad de {TARGET} por Tipo de Clima (Año a Año)", y=1.05)
     plt.show()
 else:
     print("La columna CLIMA no está en el dataset. Asegúrate de correr entrenar.py primero.")

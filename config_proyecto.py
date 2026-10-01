@@ -19,7 +19,8 @@ LINEA = 'REX'
 DESFASE_CAMPANAS = 3   # el ADV de una campana en PAIS_ORIGEN anticipa el NAC de esa campana+3 en PAIS_DESTINO
 
 # --- VENTANA DE CAMPAÑAS Y SPLIT -------------------------------------------
-CAMP_INI = 202401      # Rango inicial actualizado (Sliding window) para evitar Drift de 2022-2023
+CAMP_INI = 202201      # Rango inicial para extraccion de datos y EDAs
+CAMP_INI_MODELO = 202401 # Rango inicial para el entrenamiento (para evitar Drift de 2022-2023)
 CAMP_FIN = 202613
 CORTE_TRAIN_TEST = 202512  # >= esta campaña queda como TEST (validacion)
 

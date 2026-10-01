@@ -40,6 +40,51 @@ plt.xlabel("Ratio")
 plt.ylabel("Frecuencia")
 plt.show()
 
+# --- 1.1 Análisis de Outliers (Valores altos de RATIO_FACTOR) ---
+print("\n--- 1.1 Exportando Outliers de RATIO_FACTOR ---")
+# Parámetros editables para el usuario
+UMBRAL_TIPO = 'fijo' # Puede ser 'fijo' o 'percentil'
+VALOR_UMBRAL = 8 # Si es fijo, RATIO_FACTOR > 8. Si es percentil, ej. 95 (top 5%)
+
+if UMBRAL_TIPO == 'fijo':
+    corte = VALOR_UMBRAL
+else:
+    corte = np.percentile(df[TARGET_VISUAL].dropna(), VALOR_UMBRAL)
+
+df_outliers = df[df[TARGET_VISUAL] > corte].copy()
+
+# Columnas a exportar
+cols_export = ['CAMP'] if 'CAMP' in df.columns else []
+cols_export += ['NOMBRE_SAP'] if 'NOMBRE_SAP' in df.columns else []
+cols_export += ['SUBGRUPO'] if 'SUBGRUPO' in df.columns else []
+cols_export += [TARGET_VISUAL]
+
+df_outliers = df_outliers[cols_export].sort_values(by=TARGET_VISUAL, ascending=False)
+
+# Crear resumen (Metadatos)
+resumen = {
+    'Parámetro Usado': f"{UMBRAL_TIPO.upper()} ({VALOR_UMBRAL})",
+    'Corte Real Aplicado (Ratio)': round(corte, 2),
+    'Rango de Campañas Analizado': f"{df['CAMP'].min()} a {df['CAMP'].max()}" if 'CAMP' in df.columns else "N/A",
+    'Total Referencias en Dataset': len(df),
+    'Referencias Outliers Encontradas': len(df_outliers),
+    'Porcentaje del Dataset': f"{(len(df_outliers) / len(df)):.2%}",
+    'Ratio Máximo en Outliers': round(df_outliers[TARGET_VISUAL].max(), 2) if not df_outliers.empty else 0,
+    'Ratio Mínimo en Outliers': round(df_outliers[TARGET_VISUAL].min(), 2) if not df_outliers.empty else 0,
+    'Promedio Ratio en Outliers': round(df_outliers[TARGET_VISUAL].mean(), 2) if not df_outliers.empty else 0
+}
+df_resumen = pd.DataFrame(list(resumen.items()), columns=['Métrica', 'Valor'])
+
+# Exportar a Excel
+from config import REPORTS_EXCEL
+ruta_outliers = REPORTS_EXCEL / 'Outliers_Ratio_Factor.xlsx'
+REPORTS_EXCEL.mkdir(parents=True, exist_ok=True)
+
+with pd.ExcelWriter(ruta_outliers) as writer:
+    df_resumen.to_excel(writer, sheet_name='Resumen_Tecnico', index=False)
+    df_outliers.to_excel(writer, sheet_name='Detalle_Referencias', index=False)
+print(f"✅ Excel de Outliers exportado en: {ruta_outliers}\n")
+
 # Boxplot del target por subgrupo (para ver diferencias entre familias)
 if 'SUBGRUPO' in df.columns:
     plt.figure(figsize=(12, 6))

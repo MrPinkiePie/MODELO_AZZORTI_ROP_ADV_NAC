@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # corrida: se definen UNA vez en config_proyecto.py (raiz), compartidos con 0.- MOD_TLL
 sys.path.append(str(PROJECT_ROOT))
 from config_proyecto import (PAIS_DESTINO, PAIS_ORIGEN, LINEA, DESFASE_CAMPANAS,
-                             CAMP_INI, CAMP_FIN, CORTE_TRAIN_TEST, COMENTARIO_REG)
+                             CAMP_INI, CAMP_INI_MODELO, CAMP_FIN, CORTE_TRAIN_TEST, COMENTARIO_REG)
 
 # En Windows 11 24H2+ (build 26100 en adelante) ya no existe wmic.exe, que
 # joblib usa para contar nucleos FISICOS -- cae a nucleos logicos y emite

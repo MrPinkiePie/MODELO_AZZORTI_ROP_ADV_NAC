@@ -72,9 +72,9 @@ seed = 42
 usar_boruta = False  # True para reducir variables con Boruta antes de Optuna 
 max_iter=50
 
-usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
+usar_optuna = False  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
 n_trials = 50       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
-usar_ponderacion_temporal = True # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
+usar_ponderacion_temporal = False # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
 
 
 
@@ -452,8 +452,11 @@ datos_finales = calcular_hhi_clima_origen(datos_finales)
 datos_finales.to_parquet(DATA_PROCESSED / 'df_limpio.parquet', index=False, compression='snappy')
 resumen_filas(datos_finales, 'df_limpio.parquet exportado (train+test)')
 
-train = datos_finales[datos_finales['CLASIF'] == 'TRAIN']
-valid = datos_finales[datos_finales['CLASIF'] == 'TEST']
+assert CAMP_INI <= CAMP_INI_MODELO, f"ERROR: CAMP_INI ({CAMP_INI}) no puede ser más reciente que CAMP_INI_MODELO ({CAMP_INI_MODELO})"
+datos_modelo = datos_finales[datos_finales['CAMP'] >= CAMP_INI_MODELO].copy()
+
+train = datos_modelo[datos_modelo['CLASIF'] == 'TRAIN']
+valid = datos_modelo[datos_modelo['CLASIF'] == 'TEST']
 log(f'TRAIN: {len(train):,} filas (campañas < {corte_train_test}) | TEST: {len(valid):,} filas (campañas >= {corte_train_test})')
 
 # que set de variables se usa:
