@@ -58,6 +58,8 @@ cols_export = ['CAMP'] if 'CAMP' in df.columns else []
 cols_export += ['NOMBRE_SAP'] if 'NOMBRE_SAP' in df.columns else []
 cols_export += ['SUBGRUPO'] if 'SUBGRUPO' in df.columns else []
 cols_export += [TARGET_VISUAL]
+cols_export += ['URL_ADV_IN'] if 'URL_ADV_IN' in df.columns else []
+cols_export += ['URL_NAC'] if 'URL_NAC' in df.columns else []
 
 df_outliers = df_outliers[cols_export].sort_values(by=TARGET_VISUAL, ascending=False)
 
