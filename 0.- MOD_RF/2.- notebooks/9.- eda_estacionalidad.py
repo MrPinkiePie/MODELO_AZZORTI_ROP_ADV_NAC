@@ -130,8 +130,8 @@ if 'CATEGORIAS' in df.columns:
     plt.figure(figsize=(14, 6))
     sns.lineplot(data=df_cat_season, x='NUM_CAMP', y=TARGET, hue='CATEGORIAS', marker='o', palette='Set2')
     
-    # Sombreado para Día de la Madre (Campañas 4, 5, 6)
-    plt.axvspan(4, 6, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
+    # Sombreado para Día de la Madre (Campañas 4 a 7)
+    plt.axvspan(4, 7, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
     
     # Sombreado para Día del Padre (Campañas 8, 9, 10)
     plt.axvspan(8, 10, color='blue', alpha=0.1, label='Temporada Día del Padre')

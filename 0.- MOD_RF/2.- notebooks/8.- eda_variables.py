@@ -179,7 +179,7 @@ def plot_heatmap(df_data, columnas, target_col, method='pearson'):
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
     
     sns.heatmap(corr_matrix, cmap="coolwarm", center=0, annot=True, fmt=".2f", cbar=False, 
-                mask=mask, annot_kws={"size": 6}, linewidths=0.5)
+                mask=mask, annot_kws={"size": 10}, linewidths=0.5)
     plt.grid(False)  # Quitar el grid para no ensuciar la visualización
     plt.title(f"Mapa de Calor - Correlaciones ({method.capitalize()}) de Variables Numéricas")
     plt.xticks(rotation=45, ha='right', fontsize=8)
