@@ -183,9 +183,9 @@ print("\n--- 4. Efecto de Estacionalidad Climática ---")
 if 'CLIMA' in df.columns:
     if 'SUBGRUPO' in df.columns:
         subg_str = df['SUBGRUPO'].astype(str)
-        df.loc[subg_str == '209', 'CLIMA'] = 'FRIO'
-        df.loc[subg_str == '210', 'CLIMA'] = 'NEUTRO'
-        df.loc[subg_str.isin(['230', '227']), 'CLIMA'] = 'CALIDO'
+        df.loc[subg_str.str.startswith('209'), 'CLIMA'] = 'FRIO'
+        df.loc[subg_str.str.startswith('210'), 'CLIMA'] = 'NEUTRO'
+        df.loc[subg_str.str.startswith('230') | subg_str.str.startswith('227'), 'CLIMA'] = 'CALIDO'
         
     df_clima_season = df.groupby(['CLIMA', 'NUM_CAMP'])[TARGET].mean().reset_index()
     
