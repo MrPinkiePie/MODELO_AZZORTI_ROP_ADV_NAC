@@ -158,8 +158,8 @@ if 'GENERO_INFERIDO' in df.columns:
     plt.figure(figsize=(14, 6))
     sns.lineplot(data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', marker='o', palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'})
     
-    # Sombreado para Día de la Madre (Campañas 4, 5, 6)
-    plt.axvspan(4, 6, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
+    # Sombreado para Día de la Madre (Campañas 4 a 7)
+    plt.axvspan(4, 7, color='magenta', alpha=0.1, label='Temporada Día de la Madre')
     
     # Sombreado para Día del Padre (Campañas 8, 9, 10)
     plt.axvspan(8, 10, color='blue', alpha=0.1, label='Temporada Día del Padre')
@@ -181,6 +181,12 @@ if 'GENERO_INFERIDO' in df.columns:
 # -------------------------------------------------------------
 print("\n--- 4. Efecto de Estacionalidad Climática ---")
 if 'CLIMA' in df.columns:
+    if 'SUBGRUPO' in df.columns:
+        subg_str = df['SUBGRUPO'].astype(str)
+        df.loc[subg_str == '209', 'CLIMA'] = 'FRIO'
+        df.loc[subg_str == '210', 'CLIMA'] = 'NEUTRO'
+        df.loc[subg_str.isin(['230', '227']), 'CLIMA'] = 'CALIDO'
+        
     df_clima_season = df.groupby(['CLIMA', 'NUM_CAMP'])[TARGET].mean().reset_index()
     
     plt.figure(figsize=(14, 6))
