@@ -155,23 +155,37 @@ if 'GENERO_INFERIDO' in df.columns:
     df_gender = df[df['GENERO_INFERIDO'].isin(['FEMENINO', 'MASCULINO'])]
     df_gender_season = df_gender.groupby(['ANIO', 'GENERO_INFERIDO', 'NUM_CAMP'])[TARGET].mean().reset_index()
 
-    g = sns.relplot(
-        data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', 
-        col='ANIO', col_wrap=3, kind='line', marker='o', 
-        palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'},
-        height=4, aspect=1.2
+    # VISTA 1: Un gráfico por género, líneas por año
+    g1 = sns.relplot(
+        data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='ANIO', 
+        col='GENERO_INFERIDO', kind='line', marker='o', palette='tab10',
+        height=6, aspect=1.5
     )
-    
-    # Añadir sombreados y formatear cada subgráfico
-    for ax in g.axes.flat:
-        ax.axvspan(4, 7, color='magenta', alpha=0.1, label='Día de la Madre' if ax == g.axes.flat[-1] else "")
-        ax.axvspan(8, 10, color='blue', alpha=0.1, label='Día del Padre' if ax == g.axes.flat[-1] else "")
-        ax.axvspan(16, 18, color='grey', alpha=0.1, label='Fin de Año' if ax == g.axes.flat[-1] else "")
+    for ax in g1.axes.flat:
+        ax.axvspan(4, 7, color='magenta', alpha=0.1, label='Día de la Madre' if ax == g1.axes.flat[-1] else "")
+        ax.axvspan(8, 10, color='blue', alpha=0.1, label='Día del Padre' if ax == g1.axes.flat[-1] else "")
+        ax.axvspan(16, 18, color='grey', alpha=0.1, label='Fin de Año' if ax == g1.axes.flat[-1] else "")
         ax.set_xticks(range(1, 19))
         ax.set_xlabel("Campaña")
         ax.set_ylabel(f"Promedio {TARGET}")
+    g1.fig.suptitle(f"Estacionalidad por Género (Comparativa de Años)", y=1.05)
+    plt.show()
 
-    g.fig.suptitle(f"Estacionalidad de {TARGET} por Género y Festividades (Año a Año)", y=1.05)
+    # VISTA 2: Un gráfico por año (apilados), líneas por género
+    g2 = sns.relplot(
+        data=df_gender_season, x='NUM_CAMP', y=TARGET, hue='GENERO_INFERIDO', 
+        row='ANIO', kind='line', marker='o', 
+        palette={'FEMENINO': 'magenta', 'MASCULINO': 'blue'},
+        height=4, aspect=3
+    )
+    for ax in g2.axes.flat:
+        ax.axvspan(4, 7, color='magenta', alpha=0.1)
+        ax.axvspan(8, 10, color='blue', alpha=0.1)
+        ax.axvspan(16, 18, color='grey', alpha=0.1)
+        ax.set_xticks(range(1, 19))
+        ax.set_xlabel("Campaña")
+        ax.set_ylabel(f"Promedio {TARGET}")
+    g2.fig.suptitle(f"Estacionalidad por Género (Evolución por Año, Compartiendo Eje X)", y=1.02)
     plt.show()
 
 # %%
@@ -188,18 +202,30 @@ if 'CLIMA' in df.columns:
         
     df_clima_season = df.groupby(['ANIO', 'CLIMA', 'NUM_CAMP'])[TARGET].mean().reset_index()
     
-    g = sns.relplot(
-        data=df_clima_season, x='NUM_CAMP', y=TARGET, hue='CLIMA', 
-        col='ANIO', col_wrap=3, kind='line', marker='s', linewidth=2,
-        height=4, aspect=1.2
+    # VISTA 1: Un gráfico por Clima, líneas por año
+    g1 = sns.relplot(
+        data=df_clima_season, x='NUM_CAMP', y=TARGET, hue='ANIO', 
+        col='CLIMA', kind='line', marker='s', linewidth=2, palette='tab10',
+        height=6, aspect=1.5
     )
-    
-    for ax in g.axes.flat:
+    for ax in g1.axes.flat:
         ax.set_xticks(range(1, 19))
         ax.set_xlabel("Campaña")
         ax.set_ylabel(f"Promedio {TARGET}")
+    g1.fig.suptitle(f"Estacionalidad por Tipo de Clima (Comparativa de Años)", y=1.05)
+    plt.show()
 
-    g.fig.suptitle(f"Estacionalidad de {TARGET} por Tipo de Clima (Año a Año)", y=1.05)
+    # VISTA 2: Un gráfico por año (apilados), líneas por clima
+    g2 = sns.relplot(
+        data=df_clima_season, x='NUM_CAMP', y=TARGET, hue='CLIMA', 
+        row='ANIO', kind='line', marker='s', linewidth=2,
+        height=4, aspect=3
+    )
+    for ax in g2.axes.flat:
+        ax.set_xticks(range(1, 19))
+        ax.set_xlabel("Campaña")
+        ax.set_ylabel(f"Promedio {TARGET}")
+    g2.fig.suptitle(f"Estacionalidad por Tipo de Clima (Evolución por Año, Compartiendo Eje X)", y=1.02)
     plt.show()
 else:
     print("La columna CLIMA no está en el dataset. Asegúrate de correr entrenar.py primero.")
