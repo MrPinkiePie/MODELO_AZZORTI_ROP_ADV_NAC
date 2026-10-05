@@ -125,7 +125,12 @@ def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=4
 
     rf_boruta = RandomForestRegressor(n_estimators=200, max_depth=7, random_state=seed, n_jobs=-1)
     boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=1, random_state=seed)
-    boruta.fit(X_train_num.values, y_train.values)
+    
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        boruta.fit(X_train_num.values, y_train.values)
+
 
     nombres = features['all']
     print("Confirmadas :", [f for f, s in zip(nombres, boruta.support_) if s])
