@@ -69,12 +69,12 @@ corte_train_test = CORTE_TRAIN_TEST
 seed = 42
 
 
-usar_boruta = False  # True para reducir variables con Boruta antes de Optuna 
-max_iter=50
+usar_boruta = True  # True para reducir variables con Boruta antes de Optuna 
+max_iter=100
 
-usar_optuna = False  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
-n_trials = 50       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
-usar_ponderacion_temporal = False # True para que Optuna busque un decay_rate y aplique ponderacion exponencial por antiguedad
+usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
+n_trials = 100       # bajarlo reduce el tiempo de corrida, a costa de una busqueda menos fina
+usar_ponderacion_temporal = False # Modificado por batch
 
 
 
@@ -667,7 +667,7 @@ print(resultado_test_por_anio)
 titulo_paso('PASO 16: SVS/SBR POR BIN DE Q70_Q30 (mismo analisis que MODELO_AZZORTI_ROP_NAC_NAC)')
 resultado_largo = analizar_svs_sbr_por_bin_ratio(df_final, col_ratio='Q70_Q30', corte_fijos=False)
 graficar_svs_sbr_por_bin(resultado_largo)
-plt.show()
+# plt.show()
 
 # TODO: falta predecir.py (aplicar este .pkl sobre campanas nuevas, no solo
 # sobre el split train/test de esta corrida) -- ver README.md de este modelo.

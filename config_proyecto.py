@@ -20,11 +20,11 @@ DESFASE_CAMPANAS = 3   # el ADV de una campana en PAIS_ORIGEN anticipa el NAC de
 
 # --- VENTANA DE CAMPAÑAS Y SPLIT -------------------------------------------
 CAMP_INI = 202201      # Rango inicial para extraccion de datos y EDAs
-CAMP_INI_MODELO = 202401 # Rango inicial para el entrenamiento (para evitar Drift de 2022-2023)
-CAMP_FIN = 202613
+CAMP_INI_MODELO = 202201 # Rango inicial para el entrenamiento (para evitar Drift de 2022-2023)
+CAMP_FIN = 202614
 CORTE_TRAIN_TEST = 202512  # >= esta campaña queda como TEST (validacion)
 
 # --- CORRIDA DE REFERENCIA -------------------------------------------------
 # comentario de la corrida de 0.- MOD_RF: va en el nombre del csv que exporta
 # (PRUEBAS DE MODELO) y es el que lee 0.- MOD_TLL para repartir entre tallas
-COMENTARIO_REG = 'PRUEBA 4'
+COMENTARIO_REG = 'PRUEBA 7'

@@ -13,3 +13,9 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Directorios de datos y logs
+0.- MOD_RF/0.- data/
+0.- MOD_TLL/0.- data/
+Resultados_Madrugada/
+consola_*.txt
