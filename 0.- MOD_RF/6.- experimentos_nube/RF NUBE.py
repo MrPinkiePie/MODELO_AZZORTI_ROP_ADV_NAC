@@ -31,9 +31,9 @@ DEV_ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTOS_NUBE = Path(__file__).resolve().parent
 
 comentario = "prueba_1"
-USAR_TOP_K_FEATURES = True  # False = usa todas las numeric_features+categorical_features (busqueda completa)
+USAR_TOP_K_FEATURES = False  # False = usa todas las numeric_features+categorical_features (busqueda completa)
 N_ESTIMATORS_BUSQUEDA = 100  # arboles del RF SOLO durante la busqueda combinatoria; subir para el modelo final
-TOP_K_FEATURES = 14
+TOP_K_FEATURES = 11
 
 # ----1. Cargar los datos ya armados por entrenar.py (PASO 9: export a df_limpio.parquet)
 df = pd.read_parquet(DEV_ROOT / '0.- data' / 'processed' / 'df_limpio.parquet')
@@ -55,26 +55,12 @@ cycle_features = []
 # probar tambien los crudos, agregarlos aca a mano segun el PAIS_ORIGEN usado
 # en la corrida de entrenar.py que genero df_limpio.parquet.
 numeric_features = [
-    'RATIO_PRECIO', 'FACT_ADV_RGN',
-    'FACTOR_MAX', 'FACTOR_MIN', 'FACTOR_MEDIANA',
-    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN',
-    'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN', 'RATIO_PROMEDIO_PRECIO_ORIGEN_SUBGRUPO',
-    'NUM_PRODUCTOS_POR_CATEGORIAS_ORIGEN', 'NUM_PRODUCTOS_POR_SUBGRUPO_ORIGEN',
-    'NUM_PRODUCTOS_POR_CATEGORIAS_PAGINA_ORIGEN',
-    'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'PRECIO_PROMEDIO_SUBGRUPO_DESTINO',
-    'RATIO_PROMEDIO_COMPETIDORES_PRECIO_DESTINO', 'RATIO_PROMEDIO_PRECIO_DESTINO_SUBGRUPO',
-    'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO', 'NUM_PRODUCTOS_POR_SUBGRUPO_DESTINO',
-    'NUM_PRODUCTOS_POR_CATEGORIAS_PAGINA_DESTINO',
-    'PRECIO_N', 'PRECIO_ADV_IN',
-    'PAG_ADV_IN', 'PAG_NAC_NEW', 'PAG_ADV_IN_PAG_DER', 'PAG_NAC_NEW_PAG_DER', 'RATIO_PAG_NAC_ADV',
-    'EXPOSICION_ORIGEN', 'EXPOSICION_DESTINO', 'RATIO_EXPOSICION',
-    'CAMP_SEN', 'CAMP_COS',
+    'RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MAX', 'FACTOR_MIN', 'FACTOR_MEDIANA', 
+    'FACT_BOG', 'FACT_OCC1', 'FACT_SAN1', 'FACT_COS', 
+    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN'
 ]
 
-categorical_features = [
-    'SUBGRUPO', 'CATEGORIAS', 'GRUPO', 'CAMBIO_PAG_LADO', 'TIPO_REF',
-    'ESTR_MIX', 'UBICACION_PAG_MIX', 'NUM_CAMP_MIX',
-]
+categorical_features = []
 
 
 # =========================================================
@@ -194,15 +180,15 @@ def run_model_on_combination(feature_combo):
         results = []
         for i, name in enumerate(percentile_names):
 
-            # LOG_RATIO_FACTOR: exp(pred)/1000 - 0.0001, sin el log-shift que
-            # usa NAC_NAC (ver invert_y en 3.- src/models/entrenamiento_utils.py)
-            pred_adjusted = (np.exp(predicted_percentiles[i]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN']
+            # LOG_RATIO_FACTOR: exp(pred)
+            # usa ADV_GUA (ver invert_y en 3.- src/models/entrenamiento_utils.py)
+            pred_adjusted = np.exp(predicted_percentiles[i]) * TEST['FACTOR_RCP_ORIGEN']
 
             y_real = 'FACTOR_RCP_DESTINO'
 
             svs_ind, sbr_ind, srv_total, sbr_total = svs_sbr(pred_adjusted, TEST[y_real])
 
-            pred_adjusted_train = (np.exp(predicted_percentiles_train[i]) / 1000 - 0.0001) * TRAIN['FACTOR_RCP_ORIGEN']
+            pred_adjusted_train = np.exp(predicted_percentiles_train[i]) * TRAIN['FACTOR_RCP_ORIGEN']
 
             svs_ind_train, sbr_ind_train, srv_total_train, sbr_total_train = svs_sbr(pred_adjusted_train, TRAIN[y_real])
 
@@ -219,9 +205,9 @@ def run_model_on_combination(feature_combo):
             std_svs = grouped['SVS_IND'].std()
             std_sbr = grouped['SBR_IND'].std()
 
-            lim_sup = (np.exp(predicted_percentiles[-1]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
-            lim_inf = (np.exp(predicted_percentiles[0]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
-            per_50 = (np.exp(predicted_percentiles[5]) / 1000 - 0.0001) * TEST['FACTOR_RCP_ORIGEN'].values
+            lim_sup = np.exp(predicted_percentiles[-1]) * TEST['FACTOR_RCP_ORIGEN'].values
+            lim_inf = np.exp(predicted_percentiles[0]) * TEST['FACTOR_RCP_ORIGEN'].values
+            per_50 = np.exp(predicted_percentiles[5]) * TEST['FACTOR_RCP_ORIGEN'].values
 
             ratio_per_50_lim_inf = sum(per_50) / sum(lim_inf)
             ratio_lim_sup_per_50 = sum(lim_sup) / sum(per_50)
