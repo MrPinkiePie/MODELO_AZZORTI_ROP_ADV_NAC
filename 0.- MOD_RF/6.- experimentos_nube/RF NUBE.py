@@ -44,7 +44,9 @@ TEST = df[df["SPLIT"].isin(["TEST", 'VALIDACION'])].copy()
 print("Train shape:", TRAIN.shape)
 print("Test shape:", TEST.shape)
 
-target = ['LOG_RATIO_FACTOR']
+# --- CONFIGURACION TARGET ---
+TARGET_SELECCIONADO = 'RATIO_FACTOR' # Puede ser 'LOG_RATIO_FACTOR' o 'RATIO_FACTOR'
+target = [TARGET_SELECCIONADO]
 
 cycle_features = []
 
@@ -180,16 +182,20 @@ def run_model_on_combination(feature_combo):
         results = []
         for i, name in enumerate(percentile_names):
 
-            # LOG_RATIO_FACTOR: exp(pred)
-            # usa ADV_GUA (ver invert_y en 3.- src/models/entrenamiento_utils.py)
-            pred_adjusted = np.exp(predicted_percentiles[i]) * TEST['FACTOR_RCP_ORIGEN']
+            # Evaluacion matematica segun el target usado
+            if TARGET_SELECCIONADO == 'LOG_RATIO_FACTOR':
+                pred_adjusted = np.exp(predicted_percentiles[i]) * TEST['FACTOR_RCP_ORIGEN']
+                pred_adjusted_train = np.exp(predicted_percentiles_train[i]) * TRAIN['FACTOR_RCP_ORIGEN']
+            elif TARGET_SELECCIONADO == 'RATIO_FACTOR':
+                pred_adjusted = predicted_percentiles[i] * TEST['FACTOR_RCP_ORIGEN']
+                pred_adjusted_train = predicted_percentiles_train[i] * TRAIN['FACTOR_RCP_ORIGEN']
+            else:
+                pred_adjusted = predicted_percentiles[i]
+                pred_adjusted_train = predicted_percentiles_train[i]
 
             y_real = 'FACTOR_RCP_DESTINO'
 
             svs_ind, sbr_ind, srv_total, sbr_total = svs_sbr(pred_adjusted, TEST[y_real])
-
-            pred_adjusted_train = np.exp(predicted_percentiles_train[i]) * TRAIN['FACTOR_RCP_ORIGEN']
-
             svs_ind_train, sbr_ind_train, srv_total_train, sbr_total_train = svs_sbr(pred_adjusted_train, TRAIN[y_real])
 
             TEST_TEMP = TEST.copy()
@@ -205,9 +211,18 @@ def run_model_on_combination(feature_combo):
             std_svs = grouped['SVS_IND'].std()
             std_sbr = grouped['SBR_IND'].std()
 
-            lim_sup = np.exp(predicted_percentiles[-1]) * TEST['FACTOR_RCP_ORIGEN'].values
-            lim_inf = np.exp(predicted_percentiles[0]) * TEST['FACTOR_RCP_ORIGEN'].values
-            per_50 = np.exp(predicted_percentiles[5]) * TEST['FACTOR_RCP_ORIGEN'].values
+            if TARGET_SELECCIONADO == 'LOG_RATIO_FACTOR':
+                lim_sup = np.exp(predicted_percentiles[-1]) * TEST['FACTOR_RCP_ORIGEN'].values
+                lim_inf = np.exp(predicted_percentiles[0]) * TEST['FACTOR_RCP_ORIGEN'].values
+                per_50 = np.exp(predicted_percentiles[5]) * TEST['FACTOR_RCP_ORIGEN'].values
+            elif TARGET_SELECCIONADO == 'RATIO_FACTOR':
+                lim_sup = predicted_percentiles[-1] * TEST['FACTOR_RCP_ORIGEN'].values
+                lim_inf = predicted_percentiles[0] * TEST['FACTOR_RCP_ORIGEN'].values
+                per_50 = predicted_percentiles[5] * TEST['FACTOR_RCP_ORIGEN'].values
+            else:
+                lim_sup = predicted_percentiles[-1]
+                lim_inf = predicted_percentiles[0]
+                per_50 = predicted_percentiles[5]
 
             ratio_per_50_lim_inf = sum(per_50) / sum(lim_inf)
             ratio_lim_sup_per_50 = sum(lim_sup) / sum(per_50)
@@ -308,8 +323,8 @@ print(f"⏱️ Tiempo de ejecución: {elapsed_time:.4f} segundos")
 
 results_df_export = results_df.copy()
 results_df_export['VARIABLES'] = results_df['VARIABLES'].astype(str)
-results_df_export["MODELO"] = "LOG_RATIO_FACTOR"
-results_df_export.TARGET = "LOG_RATIO_FACTOR"
+results_df_export["MODELO"] = TARGET_SELECCIONADO
+results_df_export.TARGET = TARGET_SELECCIONADO
 
 EXPORTAMOS = results_df_export
 count = EXPORTAMOS["MODELO"].value_counts()
