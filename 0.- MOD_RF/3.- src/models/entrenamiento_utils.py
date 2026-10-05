@@ -110,44 +110,76 @@ def armar_x_y(df, features):
     return X, y
 
 
-def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42):
+def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42, n_bootstrap=10, max_features=11):
     """
-    Corre BorutaPy sobre X_train/y_train (con un RandomForest ligero) para
-    seleccionar variables relevantes. Devuelve el dict features actualizado
-    (num/cat/all) dejando solo las confirmadas o tentativas. Copiada de
-    MODELO_AZZORTI_ROP_NAC_NAC.
-
-    max_iter: cantidad de iteraciones que corre Boruta (bajarlo reduce el
-    tiempo de corrida, a costa de una seleccion de features menos estable).
+    Corre BorutaPy sobre X_train/y_train utilizando Bootstrap (remuestreo).
+    Calcula la estabilidad de cada variable a través de N iteraciones y se queda 
+    estrictamente con el Top `max_features` (por defecto 11).
+    Blindado: si hay menos o igual cantidad de variables que el máximo permitido,
+    devuelve todas sin necesidad de correr el proceso pesado (ej. Modelo de Tallas).
     """
-    encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed)
-    X_train_num = encoder.fit_transform(X_train, y_train)
+    n_features_candidatas = len(features['all'])
+    if n_features_candidatas <= max_features:
+        print(f"✅ Saltando Boruta Bootstrap: Sólo hay {n_features_candidatas} variables candidatas (<= {max_features}).")
+        return features
 
-    rf_boruta = RandomForestRegressor(n_estimators=200, max_depth=7, random_state=seed, n_jobs=-1)
-    boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=1, random_state=seed)
+    print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iteraciones) para encontrar el Top {max_features}...")
     
+    from sklearn.base import clone
     import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", UserWarning)
-        boruta.fit(X_train_num.values, y_train.values)
-
-
+    
+    rng = np.random.RandomState(seed)
+    resultados = []
+    
+    rf_base = RandomForestRegressor(n_estimators=100, max_depth=7, random_state=seed, n_jobs=-1)
+    
+    for b in range(n_bootstrap):
+        # Muestra con reemplazo
+        idx = rng.choice(len(X_train), size=len(X_train), replace=True)
+        
+        X_b = X_train.iloc[idx].reset_index(drop=True)
+        y_b = y_train.iloc[idx].reset_index(drop=True)
+        
+        # Encodear categóricas para esta muestra específica
+        encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed + b)
+        X_b_num = encoder.fit_transform(X_b, y_b)
+        
+        rf_boruta = clone(rf_base)
+        boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=0, random_state=seed + b)
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            boruta.fit(X_b_num.values, y_b.values)
+            
+        resultados.append({
+            "support": boruta.support_,
+            "weak": boruta.support_weak_
+        })
+        
+    support = np.vstack([r["support"] for r in resultados])
+    # Calculamos estabilidad principal y sumamos un poco de peso (0.5) a las veces que salió como tentativa
+    weak = np.vstack([r["weak"] for r in resultados])
+    estabilidad = support.mean(axis=0) + (weak.mean(axis=0) * 0.5)
+    
     nombres = features['all']
-    print("Confirmadas :", [f for f, s in zip(nombres, boruta.support_) if s])
-    print("Tentativas  :", [f for f, s in zip(nombres, boruta.support_weak_) if s])
-    print("Rechazadas  :", [f for f, s in zip(nombres, boruta.support_) if not s])
-
-    keep = boruta.support_ | boruta.support_weak_
+    resumen = pd.DataFrame({
+        "feature": nombres,
+        "estabilidad": estabilidad
+    }).sort_values("estabilidad", ascending=False).reset_index(drop=True)
+    
+    print("\nRanking de Estabilidad Boruta Bootstrap (Top 15):")
+    print(resumen.head(15).to_string(index=False))
+    
+    # Tomar el top N
+    features_top = resumen.head(max_features)['feature'].tolist()
+    
     features = dict(features)
-    features['num'] = [f for f, k in zip(features['num'],
-                        [keep[nombres.index(f)] for f in features['num']]) if k]
-    features['cat'] = [f for f, k in zip(features['cat'],
-                        [keep[nombres.index(f)] for f in features['cat']]) if k]
+    features['num'] = [f for f in features['num'] if f in features_top]
+    features['cat'] = [f for f in features['cat'] if f in features_top]
     features['all'] = features['num'] + features['cat']
-
-    print("Features finales para el modelo:", features['all'])
+    
+    print(f"\nFeatures finales seleccionadas para el modelo ({len(features['all'])}):", features['all'])
     return features
-
 
 def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=42, train_camp=None):
     """
