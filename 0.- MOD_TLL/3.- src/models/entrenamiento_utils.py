@@ -110,20 +110,18 @@ def armar_x_y(df, features):
     return X, y
 
 
-def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42, n_bootstrap=10, max_features=11):
+def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42, n_bootstrap=10, max_features=11, umbral_estabilidad=0.85):
     """
     Corre BorutaPy sobre X_train/y_train utilizando Bootstrap (remuestreo).
-    Calcula la estabilidad de cada variable a través de N iteraciones y se queda 
-    estrictamente con el Top `max_features` (por defecto 11).
-    Blindado: si hay menos o igual cantidad de variables que el máximo permitido,
-    devuelve todas sin necesidad de correr el proceso pesado (ej. Modelo de Tallas).
+    Si hay más de `max_features` variables (ej. Modelo RF), devuelve estrictamente el Top 11.
+    Si hay menos o igual cantidad de variables que el máximo (ej. Modelo de Tallas),
+    devuelve solo las variables cuya estabilidad supere el `umbral_estabilidad` (ej. 0.85).
     """
     n_features_candidatas = len(features['all'])
     if n_features_candidatas <= max_features:
-        print(f"✅ Saltando Boruta Bootstrap: Sólo hay {n_features_candidatas} variables candidatas (<= {max_features}).")
-        return features
-
-    print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iteraciones) para encontrar el Top {max_features}...")
+        print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para variables <= {max_features}. Filtro: Estabilidad >= {umbral_estabilidad}")
+    else:
+        print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para encontrar el Top {max_features}...")
     
     from sklearn.base import clone
     import warnings
@@ -170,8 +168,15 @@ def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=4
     print("\nRanking de Estabilidad Boruta Bootstrap (Top 15):")
     print(resumen.head(15).to_string(index=False))
     
-    # Tomar el top N
-    features_top = resumen.head(max_features)['feature'].tolist()
+    # Toma de decisión
+    if n_features_candidatas <= max_features:
+        features_top = resumen[resumen['estabilidad'] >= umbral_estabilidad]['feature'].tolist()
+        if len(features_top) == 0:
+            print("⚠️ CUIDADO: Ninguna variable superó el umbral. Se retendrá la variable top 1 para evitar que el modelo explote.")
+            features_top = [resumen.iloc[0]['feature']]
+    else:
+        features_top = resumen.head(max_features)['feature'].tolist()
+
     
     features = dict(features)
     features['num'] = [f for f in features['num'] if f in features_top]
