@@ -319,7 +319,7 @@ results_df = pd.DataFrame(flattened_results)
 
 end_time = time.time()
 elapsed_time = end_time - start_time
-print(f"⏱️ Tiempo de ejecución: {elapsed_time:.4f} segundos")
+print(f"Tiempo de ejecución: {elapsed_time:.4f} segundos")
 
 results_df_export = results_df.copy()
 results_df_export['VARIABLES'] = results_df['VARIABLES'].astype(str)
