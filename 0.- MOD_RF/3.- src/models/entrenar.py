@@ -95,12 +95,13 @@ guardar_pkl = True   # True reemplaza el .pkl anterior en 4.- models/
 #    'cat': ['NUM_CAMP_MIX', 'SUBGRUPO', 'CATEGORIAS', 'CLIMA'],
 #}
 
-# Set Fijo - Modelo 1 (ANDROIDE_1563)
+# Set Fijo - Modelo 2 (ANDROIDE_493)
 FEATURES_FIJAS = {
     'target': 'LOG_RATIO_FACTOR',
     'num': [
-        'RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MAX', 'FACTOR_MIN', 'FACTOR_MEDIANA',
-        'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'MOMENTUM_SUBGRUPO_LAG_3', 'HHI_CLIMA_ORIGEN'
+        'FACT_ADV_RGN', 'FACTOR_MAX', 'FACTOR_MEDIANA',
+        'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN',
+        'MOMENTUM_SUBGRUPO_LAG_3'
     ],
     'cat': ['UBICACION_PAG_MIX']
 }
