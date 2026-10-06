@@ -69,7 +69,7 @@ corte_train_test = CORTE_TRAIN_TEST
 seed = 42
 
 
-usar_boruta = True  # True para reducir variables con Boruta antes de Optuna 
+usar_boruta = False  # True para reducir variables con Boruta antes de Optuna 
 max_iter=100
 
 usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna 
@@ -83,17 +83,17 @@ nombre_modelo = NOMBRE_PKL
 guardar_pkl = True   # True reemplaza el .pkl anterior en 4.- models/
 
 # Set FIJO elegido a mano (se usa si usar_boruta=False).
-# FEATURES_FIJAS = {
-#     'target': 'LOG_RATIO_FACTOR',
-#     'num': ['RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MEDIANA', 'FACTOR_MAX', 'FACTOR_MIN',
-#             'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'NUM_PRODUCTOS_POR_CATEGORIAS_ORIGEN',
-#             'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN',
-#             'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO',
-#             'PAG_NAC_NEW', 'PAG_ADV_IN',
-#             'CAMP_SEN', 'CAMP_COS','MOMENTUM_SUBGRUPO_LAG_3',
-#             'MOMENTUM_CLIMA_LAG_3', 'HHI_CLIMA_ORIGEN'],
-#     'cat': ['NUM_CAMP_MIX', 'SUBGRUPO', 'CATEGORIAS', 'CLIMA'],
-# }
+#FEATURES_FIJAS = {
+#   'target': 'LOG_RATIO_FACTOR',
+#    'num': ['RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MEDIANA', 'FACTOR_MAX', 'FACTOR_MIN',
+#            'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'NUM_PRODUCTOS_POR_CATEGORIAS_ORIGEN',
+#            'RATIO_PROMEDIO_COMPETIDORES_PRECIO_ORIGEN',
+#            'PRECIO_PROMEDIO_COMPETIDORES_DESTINO', 'NUM_PRODUCTOS_POR_CATEGORIAS_DESTINO',
+#            'PAG_NAC_NEW', 'PAG_ADV_IN',
+#            'CAMP_SEN', 'CAMP_COS','MOMENTUM_SUBGRUPO_LAG_3',
+#            'MOMENTUM_CLIMA_LAG_3', 'HHI_CLIMA_ORIGEN'],
+#    'cat': ['NUM_CAMP_MIX', 'SUBGRUPO', 'CATEGORIAS', 'CLIMA'],
+#}
 
 # Nuevo Set Fijo (Prueba 8) - 11 variables puras
 FEATURES_FIJAS = {
@@ -105,8 +105,6 @@ FEATURES_FIJAS = {
     ],
     'cat': []
 }
-
-
 
 #%%
 #===============================================
