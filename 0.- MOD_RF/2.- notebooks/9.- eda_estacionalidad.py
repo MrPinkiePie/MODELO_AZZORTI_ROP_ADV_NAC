@@ -64,6 +64,19 @@ plt.legend(title='Año')
 plt.tight_layout()
 plt.show()
 
+# VISTA EXTRA: Un gráfico por año (apilados en filas compartiendo el eje X)
+g = sns.relplot(
+    data=df_season, x='NUM_CAMP', y=TARGET, 
+    row='ANIO', kind='line', marker='o', color='teal',
+    height=3, aspect=4
+)
+for ax in g.axes.flat:
+    ax.set_xticks(range(1, 19))
+    ax.set_xlabel("Número de Campaña (1 a 18)")
+    ax.set_ylabel(f"Promedio {TARGET}")
+g.fig.suptitle(f"Comportamiento de {TARGET} (Evolución por Año, Compartiendo Eje X)", y=1.02)
+plt.show()
+
 # %%
 # -------------------------------------------------------------
 # SECCION 2: DESCOMPOSICIÓN ESTACIONAL (SEASONAL DECOMPOSE)
