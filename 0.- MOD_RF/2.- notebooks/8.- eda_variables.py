@@ -91,7 +91,7 @@ resumen = {
 df_resumen = pd.DataFrame(list(resumen.items()), columns=['Métrica', 'Valor'])
 
 # --- 1.3 Agrupaciones por Campaña y Nivel de Detalle ---
-# Agrupacion general (Ideal para ver si la campana completa estuvo mal)
+# 1. Agrupacion general (Nivel más alto: la campana completa)
 grp_camp = df.groupby(['ANIO', 'CAMP', 'CLASIF'])[TARGET_VISUAL].agg(
     CANT_REFERENCIAS='count',
     RATIO_PROMEDIO='mean',
@@ -100,14 +100,23 @@ grp_camp = df.groupby(['ANIO', 'CAMP', 'CLASIF'])[TARGET_VISUAL].agg(
     RATIO_MAX='max'
 ).reset_index().sort_values(['ANIO', 'CAMP'])
 
-# Agrupacion detallada (Para buscar culpables a nivel subgrupo/genero)
-grp_det = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO', 'SUBGRUPO'])[TARGET_VISUAL].agg(
+# 2. Agrupacion por Género (Nivel intermedio: Campaña + Género)
+grp_gen = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO'])[TARGET_VISUAL].agg(
     CANT_REFERENCIAS='count',
     RATIO_PROMEDIO='mean',
     RATIO_MEDIANO='median',
     RATIO_MIN='min',
     RATIO_MAX='max'
 ).reset_index().sort_values(['ANIO', 'CAMP', 'GENERO_INFERIDO'])
+
+# 3. Agrupacion detallada (Nivel más bajo: Campaña + Género + Subgrupo)
+grp_det = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO', 'SUBGRUPO'])[TARGET_VISUAL].agg(
+    CANT_REFERENCIAS='count',
+    RATIO_PROMEDIO='mean',
+    RATIO_MEDIANO='median',
+    RATIO_MIN='min',
+    RATIO_MAX='max'
+).reset_index().sort_values(['ANIO', 'CAMP', 'GENERO_INFERIDO', 'SUBGRUPO'])
 
 # Exportar a Excel
 from config import REPORTS_EXCEL
@@ -117,6 +126,7 @@ REPORTS_EXCEL.mkdir(parents=True, exist_ok=True)
 with pd.ExcelWriter(ruta_outliers) as writer:
     df_resumen.to_excel(writer, sheet_name='Resumen_Tecnico', index=False)
     grp_camp.to_excel(writer, sheet_name='Ratio_Por_Campana', index=False)
+    grp_gen.to_excel(writer, sheet_name='Ratio_Campana_Genero', index=False)
     grp_det.to_excel(writer, sheet_name='Ratio_Campana_Detalle', index=False)
     df_outliers.to_excel(writer, sheet_name='Detalle_Outliers', index=False)
 print(f"✅ Excel de Análisis de Ratio Factor exportado en: {ruta_outliers}\n")
