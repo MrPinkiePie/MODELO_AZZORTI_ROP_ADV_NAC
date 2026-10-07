@@ -90,6 +90,15 @@ resumen = {
 }
 df_resumen = pd.DataFrame(list(resumen.items()), columns=['Métrica', 'Valor'])
 
+# Agregar Ratio Factor Promedio y Mediano por Año al Resumen Técnico
+ratio_por_anio = df.groupby('ANIO')[TARGET_VISUAL].agg(['mean', 'median']).round(2)
+filas_anio = []
+for anio, row in ratio_por_anio.iterrows():
+    filas_anio.append({'Métrica': f'Ratio Promedio Año {anio}', 'Valor': row['mean']})
+    filas_anio.append({'Métrica': f'Ratio Mediano Año {anio}', 'Valor': row['median']})
+df_resumen = pd.concat([df_resumen, pd.DataFrame(filas_anio)], ignore_index=True)
+
+
 # --- 1.3 Agrupaciones por Campaña y Nivel de Detalle ---
 # 1. Agrupacion general (Nivel más alto: la campana completa)
 grp_camp = df.groupby(['ANIO', 'CAMP', 'CLASIF'])[TARGET_VISUAL].agg(
@@ -109,14 +118,14 @@ grp_gen = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO'])[TARGET_VISUA
     RATIO_MAX='max'
 ).reset_index().sort_values(['ANIO', 'CAMP', 'GENERO_INFERIDO'])
 
-# 3. Agrupacion detallada (Nivel más bajo: Campaña + Género + Subgrupo)
-grp_det = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO', 'SUBGRUPO'])[TARGET_VISUAL].agg(
+# 3. Agrupacion por Subgrupo (Nivel detallado: Campaña + Subgrupo)
+grp_sub = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'SUBGRUPO'])[TARGET_VISUAL].agg(
     CANT_REFERENCIAS='count',
     RATIO_PROMEDIO='mean',
     RATIO_MEDIANO='median',
     RATIO_MIN='min',
     RATIO_MAX='max'
-).reset_index().sort_values(['ANIO', 'CAMP', 'GENERO_INFERIDO', 'SUBGRUPO'])
+).reset_index().sort_values(['ANIO', 'CAMP', 'SUBGRUPO'])
 
 # Exportar a Excel
 from config import REPORTS_EXCEL
@@ -127,7 +136,7 @@ with pd.ExcelWriter(ruta_outliers) as writer:
     df_resumen.to_excel(writer, sheet_name='Resumen_Tecnico', index=False)
     grp_camp.to_excel(writer, sheet_name='Ratio_Por_Campana', index=False)
     grp_gen.to_excel(writer, sheet_name='Ratio_Campana_Genero', index=False)
-    grp_det.to_excel(writer, sheet_name='Ratio_Campana_Detalle', index=False)
+    grp_sub.to_excel(writer, sheet_name='Ratio_Campana_Subgrupo', index=False)
     df_outliers.to_excel(writer, sheet_name='Detalle_Outliers', index=False)
 print(f"✅ Excel de Análisis de Ratio Factor exportado en: {ruta_outliers}\n")
 
