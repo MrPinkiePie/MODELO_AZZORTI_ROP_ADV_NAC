@@ -112,79 +112,133 @@ def armar_x_y(df, features):
 
 def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42, n_bootstrap=10, max_features=11, umbral_estabilidad=0.85):
     """
-    Corre BorutaPy sobre X_train/y_train utilizando Bootstrap (remuestreo).
-    Si hay más de `max_features` variables (ej. Modelo RF), devuelve estrictamente el Top 11.
-    Si hay menos o igual cantidad de variables que el máximo (ej. Modelo de Tallas),
-    devuelve solo las variables cuya estabilidad supere el `umbral_estabilidad` (ej. 0.85).
+    Selección de variables usando SHAP Feature Importance.
+    (La versión anterior de Boruta está comentada abajo por requerimiento de trazabilidad).
+    
+    1. Entrena un Random Forest rápido con TODAS las variables.
+    2. Usa TreeExplainer de SHAP para calcular el impacto marginal absoluto de cada variable.
+    3. Retiene el top N ('max_features').
     """
-    n_features_candidatas = len(features['all'])
-    if n_features_candidatas <= max_features:
-        print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para variables <= {max_features}. Filtro: Estabilidad >= {umbral_estabilidad}")
-    else:
-        print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para encontrar el Top {max_features}...")
+    print(f"⏳ Seleccionando Top {max_features} variables usando SHAP Feature Importance...")
     
-    from sklearn.base import clone
-    import warnings
+    from sklearn.ensemble import RandomForestRegressor
+    import category_encoders as ce
+    import shap
     
-    rng = np.random.RandomState(seed)
-    resultados = []
+    # Encodear categóricas una sola vez para el RF rápido
+    encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed)
+    X_train_num = encoder.fit_transform(X_train, y_train)
     
+    # Entrenar un RF rápido (100 árboles es suficiente para que SHAP converja)
     rf_base = RandomForestRegressor(n_estimators=100, max_depth=7, random_state=seed, n_jobs=-1)
+    rf_base.fit(X_train_num, y_train)
     
-    for b in range(n_bootstrap):
-        # Muestra con reemplazo
-        idx = rng.choice(len(X_train), size=len(X_train), replace=True)
-        
-        X_b = X_train.iloc[idx].reset_index(drop=True)
-        y_b = y_train.iloc[idx].reset_index(drop=True)
-        
-        # Encodear categóricas para esta muestra específica
-        encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed + b)
-        X_b_num = encoder.fit_transform(X_b, y_b)
-        
-        rf_boruta = clone(rf_base)
-        boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=0, random_state=seed + b)
-        
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            boruta.fit(X_b_num.values, y_b.values)
-            
-        resultados.append({
-            "support": boruta.support_,
-            "weak": boruta.support_weak_
-        })
-        
-    support = np.vstack([r["support"] for r in resultados])
-    # Calculamos estabilidad principal y sumamos un poco de peso (0.5) a las veces que salió como tentativa
-    weak = np.vstack([r["weak"] for r in resultados])
-    estabilidad = support.mean(axis=0) + (weak.mean(axis=0) * 0.5)
+    # Calcular SHAP values
+    explainer = shap.TreeExplainer(rf_base)
+    # Tomamos una muestra aleatoria si el dataset es inmenso, pero para RF suele ser rápido
+    shap_values = explainer.shap_values(X_train_num)
     
-    nombres = features['all']
+    # Importancia global SHAP: Promedio del valor absoluto de los SHAP values para cada variable
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    
     resumen = pd.DataFrame({
-        "feature": nombres,
-        "estabilidad": estabilidad
-    }).sort_values("estabilidad", ascending=False).reset_index(drop=True)
+        "feature": X_train_num.columns,
+        "shap_importance": mean_abs_shap
+    }).sort_values("shap_importance", ascending=False).reset_index(drop=True)
     
-    print("\nRanking de Estabilidad Boruta Bootstrap (Top 15):")
+    print("\nRanking de Importancia SHAP (Top 15):")
     print(resumen.head(15).to_string(index=False))
     
     # Toma de decisión
-    if n_features_candidatas <= max_features:
-        features_top = resumen[resumen['estabilidad'] >= umbral_estabilidad]['feature'].tolist()
-        if len(features_top) == 0:
-            print("⚠️ CUIDADO: Ninguna variable superó el umbral. Se retendrá la variable top 1 para evitar que el modelo explote.")
-            features_top = [resumen.iloc[0]['feature']]
-    else:
-        features_top = resumen.head(max_features)['feature'].tolist()
+    features_top = resumen.head(max_features)['feature'].tolist()
+    
+    features_nuevas = dict(features)
+    features_nuevas['num'] = [f for f in features_nuevas['num'] if f in features_top]
+    features_nuevas['cat'] = [f for f in features_nuevas['cat'] if f in features_top]
+    features_nuevas['all'] = features_nuevas['num'] + features_nuevas['cat']
+    
+    print(f"\nFeatures finales seleccionadas para el modelo ({len(features_nuevas['all'])}):", features_nuevas['all'])
+    return features_nuevas
 
-    
-    features = dict(features)
-    features['num'] = [f for f in features['num'] if f in features_top]
-    features['cat'] = [f for f in features['cat'] if f in features_top]
-    features['all'] = features['num'] + features['cat']
-    
-    print(f"\nFeatures finales seleccionadas para el modelo ({len(features['all'])}):", features['all'])
-    return features
+
+# =========================================================================================
+# VERSIÓN ANTERIOR (BORUTA BOOTSTRAP) COMENTADA POR TRAZABILIDAD
+# =========================================================================================
+# def seleccionar_features_boruta(X_train, y_train, features, max_iter=100, seed=42, n_bootstrap=10, max_features=11, umbral_estabilidad=0.85):
+#     """
+#     Corre BorutaPy sobre X_train/y_train utilizando Bootstrap (remuestreo).
+#     Si hay más de `max_features` variables (ej. Modelo RF), devuelve estrictamente el Top 11.
+#     Si hay menos o igual cantidad de variables que el máximo (ej. Modelo de Tallas),
+#     devuelve solo las variables cuya estabilidad supere el `umbral_estabilidad` (ej. 0.85).
+#     """
+#     n_features_candidatas = len(features['all'])
+#     if n_features_candidatas <= max_features:
+#         print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para variables <= {max_features}. Filtro: Estabilidad >= {umbral_estabilidad}")
+#     else:
+#         print(f"⏳ Corriendo Boruta Bootstrap ({n_bootstrap} iter.) para encontrar el Top {max_features}...")
+#     
+#     from sklearn.base import clone
+#     import warnings
+#     
+#     rng = np.random.RandomState(seed)
+#     resultados = []
+#     
+#     rf_base = RandomForestRegressor(n_estimators=100, max_depth=7, random_state=seed, n_jobs=-1)
+#     
+#     for b in range(n_bootstrap):
+#         # Muestra con reemplazo
+#         idx = rng.choice(len(X_train), size=len(X_train), replace=True)
+#         
+#         X_b = X_train.iloc[idx].reset_index(drop=True)
+#         y_b = y_train.iloc[idx].reset_index(drop=True)
+#         
+#         # Encodear categóricas para esta muestra específica
+#         encoder = ce.CatBoostEncoder(cols=features['cat'], random_state=seed + b)
+#         X_b_num = encoder.fit_transform(X_b, y_b)
+#         
+#         rf_boruta = clone(rf_base)
+#         boruta = BorutaPy(rf_boruta, n_estimators='auto', max_iter=max_iter, verbose=0, random_state=seed + b)
+#         
+#         with warnings.catch_warnings():
+#             warnings.simplefilter("ignore", UserWarning)
+#             boruta.fit(X_b_num.values, y_b.values)
+#             
+#         resultados.append({
+#             "support": boruta.support_,
+#             "weak": boruta.support_weak_
+#         })
+#         
+#     support = np.vstack([r["support"] for r in resultados])
+#     # Calculamos estabilidad principal y sumamos un poco de peso (0.5) a las veces que salió como tentativa
+#     weak = np.vstack([r["weak"] for r in resultados])
+#     estabilidad = support.mean(axis=0) + (weak.mean(axis=0) * 0.5)
+#     
+#     nombres = features['all']
+#     resumen = pd.DataFrame({
+#         "feature": nombres,
+#         "estabilidad": estabilidad
+#     }).sort_values("estabilidad", ascending=False).reset_index(drop=True)
+#     
+#     print("\nRanking de Estabilidad Boruta Bootstrap (Top 15):")
+#     print(resumen.head(15).to_string(index=False))
+#     
+#     # Toma de decisión
+#     if n_features_candidatas <= max_features:
+#         features_top = resumen[resumen['estabilidad'] >= umbral_estabilidad]['feature'].tolist()
+#         if len(features_top) == 0:
+#             print("⚠️ CUIDADO: Ninguna variable superó el umbral. Se retendrá la variable top 1 para evitar que el modelo explote.")
+#             features_top = [resumen.iloc[0]['feature']]
+#     else:
+#         features_top = resumen.head(max_features)['feature'].tolist()
+# 
+#     
+#     features = dict(features)
+#     features['num'] = [f for f in features['num'] if f in features_top]
+#     features['cat'] = [f for f in features['cat'] if f in features_top]
+#     features['all'] = features['num'] + features['cat']
+#     
+#     print(f"\nFeatures finales seleccionadas para el modelo ({len(features['all'])}):", features['all'])
+#     return features
 
 def construir_objetivo_optuna(X_train, y_train, X_test, y_test, features, seed=42, train_camp=None):
     """
