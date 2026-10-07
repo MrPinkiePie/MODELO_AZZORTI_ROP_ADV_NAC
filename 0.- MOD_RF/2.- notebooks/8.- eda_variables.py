@@ -127,6 +127,18 @@ grp_sub = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'SUBGRUPO'])[TARGET_VISUAL].agg(
     RATIO_MAX='max'
 ).reset_index().sort_values(['ANIO', 'CAMP', 'SUBGRUPO'])
 
+# 4. Agrupacion por Clima (Campaña + Clima)
+if 'CLIMA' in df.columns:
+    grp_cli = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'CLIMA'])[TARGET_VISUAL].agg(
+        CANT_REFERENCIAS='count',
+        RATIO_PROMEDIO='mean',
+        RATIO_MEDIANO='median',
+        RATIO_MIN='min',
+        RATIO_MAX='max'
+    ).reset_index().sort_values(['ANIO', 'CAMP', 'CLIMA'])
+else:
+    grp_cli = pd.DataFrame()
+
 # Exportar a Excel
 from config import REPORTS_EXCEL
 ruta_outliers = REPORTS_EXCEL / 'Outliers_Ratio_Factor.xlsx'
@@ -137,6 +149,8 @@ with pd.ExcelWriter(ruta_outliers) as writer:
     grp_camp.to_excel(writer, sheet_name='Ratio_Por_Campana', index=False)
     grp_gen.to_excel(writer, sheet_name='Ratio_Campana_Genero', index=False)
     grp_sub.to_excel(writer, sheet_name='Ratio_Campana_Subgrupo', index=False)
+    if not grp_cli.empty:
+        grp_cli.to_excel(writer, sheet_name='Ratio_Campana_Clima', index=False)
     df_outliers.to_excel(writer, sheet_name='Detalle_Outliers', index=False)
 print(f"✅ Excel de Análisis de Ratio Factor exportado en: {ruta_outliers}\n")
 
