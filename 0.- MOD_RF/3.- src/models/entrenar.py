@@ -45,6 +45,7 @@ from features.construir_features import (construir_features_competencia, calcula
                                           marcar_tipo_referencia, calcular_exposicion,
                                           calcular_variables_ciclicas_campana,calcular_momentum_subgrupo,
                                           agregar_clima_subgrupo, calcular_momentum_clima, calcular_hhi_clima_origen,
+                                          calcular_momentum_referencia,
                                           obtener_features_candidatas)
 from models.entrenamiento_utils import (dividir_train_test_por_corte, armar_x_y,
                                          seleccionar_features_boruta, construir_objetivo_optuna,
@@ -95,13 +96,13 @@ guardar_pkl = True   # True reemplaza el .pkl anterior en 4.- models/
 #    'cat': ['NUM_CAMP_MIX', 'SUBGRUPO', 'CATEGORIAS', 'CLIMA'],
 #}
 
-# Set Fijo - Modelo 2 (ANDROIDE_493)
+# Set Fijo - Prueba 10 (Nuevas features de anomalia)
 FEATURES_FIJAS = {
     'target': 'LOG_RATIO_FACTOR',
     'num': [
         'FACT_ADV_RGN', 'FACTOR_MAX', 'FACTOR_MEDIANA',
         'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN',
-        'MOMENTUM_SUBGRUPO_LAG_3'
+        'MOMENTUM_SUBGRUPO_LAG_3', 'ANOMALIA_RATIO_SUBGRUPO'
     ],
     'cat': ['UBICACION_PAG_MIX']
 }
@@ -457,6 +458,10 @@ ruta_clima = DATA_PROCESSED / 'clasi_subg 8.xlsx'
 datos_finales = agregar_clima_subgrupo(datos_finales, ruta_clima)
 datos_finales = calcular_momentum_clima(datos_finales, ventanas=(3,))
 datos_finales = calcular_hhi_clima_origen(datos_finales)
+
+# Nuevas variables Fase 1
+datos_finales = calcular_momentum_referencia(datos_finales, ventanas=(3,))
+datos_finales['ANOMALIA_RATIO_SUBGRUPO'] = datos_finales['MOMENTUM_REF_LAG_3'] - datos_finales['MOMENTUM_SUBGRUPO_LAG_3']
 
 datos_finales.to_parquet(DATA_PROCESSED / 'df_limpio.parquet', index=False, compression='snappy')
 resumen_filas(datos_finales, 'df_limpio.parquet exportado (train+test)')

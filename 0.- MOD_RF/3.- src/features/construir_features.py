@@ -369,6 +369,44 @@ def calcular_momentum_clima(df, col_camp='CAMP', col_clima='CLIMA', col_target='
     return df
 
 
+def calcular_momentum_referencia(df, col_camp='CAMP', col_referencia='NOMBRE_SAP', col_subgrupo='SUBGRUPO', col_target='RATIO_FACTOR', ventanas=(3,)):
+    """
+    Calcula el momentum historico (promedio movil) del target para cada REFERENCIA (NOMBRE_SAP),
+    usando estrictamente campanas anteriores (shift).
+    Si una referencia es nueva (sin historia), utiliza el momentum de su subgrupo como fallback.
+    """
+    df = df.copy()
+    
+    # 1. Promedio del target por campana y referencia
+    agg_hist = df.groupby([col_referencia, col_camp])[col_target].mean().reset_index()
+    agg_hist = agg_hist.sort_values([col_referencia, col_camp])
+    
+    # 2. Desplazar (shift) y calcular promedios moviles por referencia
+    for v in ventanas:
+        col_name = f'MOMENTUM_REF_LAG_{v}'
+        agg_hist[col_name] = agg_hist.groupby(col_referencia)[col_target].transform(
+            lambda x: x.shift(1).rolling(window=v, min_periods=1).mean()
+        )
+        
+    # 3. Cruzar de vuelta con el dataframe original
+    cols_a_unir = [col_referencia, col_camp] + [f'MOMENTUM_REF_LAG_{v}' for v in ventanas]
+    df = pd.merge(df, agg_hist[cols_a_unir], on=[col_referencia, col_camp], how='left')
+    
+    # 4. Rellenar nulos (referencias nuevas) con el momentum del subgrupo
+    for v in ventanas:
+        col_name = f'MOMENTUM_REF_LAG_{v}'
+        col_fallback = f'MOMENTUM_SUBGRUPO_LAG_{v}'
+        
+        # Si la columna de fallback no existe, usamos un fillna básico de 1.0 para que no falle.
+        # Pero idealmente siempre se corre despues de calcular_momentum_subgrupo.
+        if col_fallback in df.columns:
+            df[col_name] = df[col_name].fillna(df[col_fallback])
+        else:
+            df[col_name] = df[col_name].fillna(1.0)
+            
+    return df
+
+
 def calcular_hhi_clima_origen(df, col_camp_destino='CAMP', col_clima='CLIMA', col_demanda_origen='FACT_ADV_RGN'):
     """
     Calcula el HHI (Indice de Herfindahl-Hirschman) de la demanda en el pais de origen

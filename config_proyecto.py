@@ -27,4 +27,4 @@ CORTE_TRAIN_TEST = 202512  # >= esta campaña queda como TEST (validacion)
 # --- CORRIDA DE REFERENCIA -------------------------------------------------
 # comentario de la corrida de 0.- MOD_RF: va en el nombre del csv que exporta
 # (PRUEBAS DE MODELO) y es el que lee 0.- MOD_TLL para repartir entre tallas
-COMENTARIO_REG = 'ANDROIDE_493'
+COMENTARIO_REG = 'PRUEBA 10'
