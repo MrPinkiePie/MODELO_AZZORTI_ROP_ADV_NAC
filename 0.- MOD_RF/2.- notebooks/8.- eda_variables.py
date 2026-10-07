@@ -40,8 +40,20 @@ plt.xlabel("Ratio")
 plt.ylabel("Frecuencia")
 plt.show()
 
-# --- 1.1 Análisis de Outliers (Valores altos de RATIO_FACTOR) ---
-print("\n--- 1.1 Exportando Outliers de RATIO_FACTOR ---")
+# --- 1.1 Preparación de Variables Descriptivas (Género y Año) ---
+if 'CATEGORIAS' in df.columns:
+    cat_str = df['CATEGORIAS'].astype(str).str.upper()
+    cond_fem = cat_str.str.contains('FEM')
+    cond_msc = cat_str.str.contains('MSC')
+    df['GENERO_INFERIDO'] = np.select([cond_fem, cond_msc], ['FEMENINO', 'MASCULINO'], default='MIXTO / OTRO')
+else:
+    df['GENERO_INFERIDO'] = 'N/A'
+
+if 'CAMP' in df.columns:
+    df['ANIO'] = df['CAMP'].astype(str).str[:4]
+
+# --- 1.2 Análisis de Outliers (Valores altos de RATIO_FACTOR) ---
+print("\n--- 1.2 Exportando Excel de Análisis de Ratio Factor (Outliers y Agrupaciones) ---")
 # Parámetros editables para el usuario
 UMBRAL_TIPO = 'fijo' # Puede ser 'fijo' o 'percentil'
 VALOR_UMBRAL = 8 # Si es fijo, RATIO_FACTOR > 8. Si es percentil, ej. 95 (top 5%)
@@ -54,12 +66,13 @@ else:
 df_outliers = df[df[TARGET_VISUAL] > corte].copy()
 
 # Columnas a exportar
-cols_export = ['CAMP'] if 'CAMP' in df.columns else []
-cols_export += ['NOMBRE_SAP'] if 'NOMBRE_SAP' in df.columns else []
-cols_export += ['SUBGRUPO'] if 'SUBGRUPO' in df.columns else []
-cols_export += [TARGET_VISUAL]
-cols_export += ['URL_ADV_IN'] if 'URL_ADV_IN' in df.columns else []
-cols_export += ['URL_NAC'] if 'URL_NAC' in df.columns else []
+cols_export = ['CAMP', 'CLASIF'] if 'CLASIF' in df.columns else ['CAMP']
+cols_export += ['GENERO_INFERIDO', 'SUBGRUPO'] if 'SUBGRUPO' in df.columns else []
+cols_export += ['NOMBRE_SAP', TARGET_VISUAL]
+cols_export += ['URL_ADV_IN', 'URL_NAC'] if 'URL_NAC' in df.columns else []
+
+# Intersección para evitar errores si no existe alguna
+cols_export = [c for c in cols_export if c in df_outliers.columns]
 
 df_outliers = df_outliers[cols_export].sort_values(by=TARGET_VISUAL, ascending=False)
 
@@ -77,6 +90,25 @@ resumen = {
 }
 df_resumen = pd.DataFrame(list(resumen.items()), columns=['Métrica', 'Valor'])
 
+# --- 1.3 Agrupaciones por Campaña y Nivel de Detalle ---
+# Agrupacion general (Ideal para ver si la campana completa estuvo mal)
+grp_camp = df.groupby(['ANIO', 'CAMP', 'CLASIF'])[TARGET_VISUAL].agg(
+    CANT_REFERENCIAS='count',
+    RATIO_PROMEDIO='mean',
+    RATIO_MEDIANO='median',
+    RATIO_MIN='min',
+    RATIO_MAX='max'
+).reset_index().sort_values(['ANIO', 'CAMP'])
+
+# Agrupacion detallada (Para buscar culpables a nivel subgrupo/genero)
+grp_det = df.groupby(['ANIO', 'CAMP', 'CLASIF', 'GENERO_INFERIDO', 'SUBGRUPO'])[TARGET_VISUAL].agg(
+    CANT_REFERENCIAS='count',
+    RATIO_PROMEDIO='mean',
+    RATIO_MEDIANO='median',
+    RATIO_MIN='min',
+    RATIO_MAX='max'
+).reset_index().sort_values(['ANIO', 'CAMP', 'GENERO_INFERIDO'])
+
 # Exportar a Excel
 from config import REPORTS_EXCEL
 ruta_outliers = REPORTS_EXCEL / 'Outliers_Ratio_Factor.xlsx'
@@ -84,8 +116,10 @@ REPORTS_EXCEL.mkdir(parents=True, exist_ok=True)
 
 with pd.ExcelWriter(ruta_outliers) as writer:
     df_resumen.to_excel(writer, sheet_name='Resumen_Tecnico', index=False)
-    df_outliers.to_excel(writer, sheet_name='Detalle_Referencias', index=False)
-print(f"✅ Excel de Outliers exportado en: {ruta_outliers}\n")
+    grp_camp.to_excel(writer, sheet_name='Ratio_Por_Campana', index=False)
+    grp_det.to_excel(writer, sheet_name='Ratio_Campana_Detalle', index=False)
+    df_outliers.to_excel(writer, sheet_name='Detalle_Outliers', index=False)
+print(f"✅ Excel de Análisis de Ratio Factor exportado en: {ruta_outliers}\n")
 
 # Boxplot del target por subgrupo (para ver diferencias entre familias)
 if 'SUBGRUPO' in df.columns:
