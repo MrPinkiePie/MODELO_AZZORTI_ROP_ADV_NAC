@@ -263,7 +263,7 @@ def calcular_variables_ciclicas_campana(df, col_num_camp, n_camps=18):
 # SUM_FACT_NAC no entra: es el real de la referencia en destino (leakage).
 FEATURES_CANDIDATAS_TALLAS = {
     'target': 'PART_NAC',
-    'num': ['PART_ADV', 'SUM_FACT_ADV', 'FACT_ADV_RGN', 'NUM_TALLAS'],
+    'num': ['PART_ADV', 'SUM_FACT_ADV', 'FACT_ADV_RGN', 'NUM_TALLAS', 'HHI_TALLAS', 'DESVIACION_TALLA_LAG_3'],
     'cat': ['SUBGRUPO', 'TALLA_NEW'],
 }
 
@@ -290,6 +290,55 @@ def calcular_participacion_talla(df):
 
     print(f'====== PARTICIPACION POR TALLA CREADA: {len(df)} FILAS, '
           f'{df["CAMP_NOMBRE_SAP"].nunique()} REFERENCIAS ======')
+    return df
+
+
+def calcular_hhi_tallas(df):
+    """
+    Calcula el HHI de la distribución de tallas para cada referencia en el país de origen (ADV).
+    HHI_TALLAS alto = demanda concentrada en 1 o 2 tallas.
+    HHI_TALLAS bajo = demanda distribuida uniformemente entre todas las tallas.
+    """
+    df = df.copy()
+    df['PART_ADV_SQ'] = df['PART_ADV'] ** 2
+    df['HHI_TALLAS'] = df.groupby('CAMP_NOMBRE_SAP')['PART_ADV_SQ'].transform('sum')
+    df = df.drop(columns=['PART_ADV_SQ'])
+    return df
+
+
+def calcular_desviacion_historica_talla(df, col_camp='CAMP', col_producto='NOMBRE_SAP', col_talla='TALLA_NEW', col_target='PART_ADV', ventanas=(3,)):
+    """
+    Calcula la participación histórica promedio de una talla para un producto específico
+    usando campañas anteriores (shift) para detectar desviaciones en la campaña actual.
+    """
+    df = df.copy()
+    
+    # 1. Agrupar por producto, talla y campana
+    agg_hist = df.groupby([col_producto, col_talla, col_camp])[col_target].mean().reset_index()
+    agg_hist = agg_hist.sort_values([col_producto, col_talla, col_camp])
+    
+    # 2. Desplazar (shift) y calcular promedios moviles por producto-talla
+    for v in ventanas:
+        col_name = f'PART_ADV_HIST_LAG_{v}'
+        agg_hist[col_name] = agg_hist.groupby([col_producto, col_talla])[col_target].transform(
+            lambda x: x.shift(1).rolling(window=v, min_periods=1).mean()
+        )
+        
+    # 3. Cruzar de vuelta con el dataframe original
+    cols_a_unir = [col_producto, col_talla, col_camp] + [f'PART_ADV_HIST_LAG_{v}' for v in ventanas]
+    df = pd.merge(df, agg_hist[cols_a_unir], on=[col_producto, col_talla, col_camp], how='left')
+    
+    # 4. Calcular desviación actual contra la historia y rellenar nulos
+    for v in ventanas:
+        col_name = f'PART_ADV_HIST_LAG_{v}'
+        col_desv = f'DESVIACION_TALLA_LAG_{v}'
+        
+        # Si no hay historia, asumimos que no hay desviación (la historia era exactamente lo que vendio hoy)
+        df[col_name] = df[col_name].fillna(df[col_target])
+        
+        # La anomalía es: lo que vendió hoy - lo que vendía históricamente
+        df[col_desv] = df[col_target] - df[col_name]
+        
     return df
 
 

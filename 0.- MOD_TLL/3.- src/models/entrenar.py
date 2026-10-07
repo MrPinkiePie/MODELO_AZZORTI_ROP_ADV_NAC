@@ -31,7 +31,8 @@ from config import (PAIS_DESTINO, PAIS_ORIGEN, LINEA, NOMBRE_PKL, MODELS_DIR, PR
                     DATA_PROCESSED, REPORTS_EXCEL, REPORTS_FIGURES,
                     RUTA_BASE_TALLAS, RUTA_PRED_REFERENCIA, CORTE_TRAIN_TEST, COMENTARIO_REG)
 from data.mis_funciones import descomponer_camp, metricas, svs_sbr, svs_sbr_por_grupo, log, resumen_filas, titulo_paso
-from features.construir_features import FEATURES_CANDIDATAS_TALLAS, calcular_participacion_talla
+from features.construir_features import (FEATURES_CANDIDATAS_TALLAS, calcular_participacion_talla,
+                                          calcular_hhi_tallas, calcular_desviacion_historica_talla)
 from models.entrenamiento_utils import (dividir_train_test_por_corte, armar_x_y,
                                          seleccionar_features_boruta, construir_objetivo_optuna,
                                          ejecutar_estudio_optuna)
@@ -52,7 +53,7 @@ corte_train_test = CORTE_TRAIN_TEST
 seed = 42
 
 
-usar_boruta = True  # True para reducir variables con Boruta antes de Optuna
+usar_boruta = False  # True para reducir variables con Boruta antes de Optuna
 max_iter = 100        # iteraciones de Boruta: bajarlo reduce el tiempo, a costa de una seleccion menos estable
 
 usar_optuna = True  # False usa los hiperparametros fijos de abajo (mas rapido); True corre Optuna
@@ -68,7 +69,7 @@ guardar_pkl = True   # True reemplaza el .pkl anterior en 4.- models/
 # revisar el importance.
 FEATURES_FIJAS = {
     'target': 'PART_NAC',
-    'num': ['PART_ADV', 'SUM_FACT_ADV', 'FACT_ADV_RGN', 'NUM_TALLAS'],
+    'num': ['PART_ADV', 'SUM_FACT_ADV', 'FACT_ADV_RGN', 'NUM_TALLAS', 'HHI_TALLAS', 'DESVIACION_TALLA_LAG_3'],
     'cat': ['SUBGRUPO', 'TALLA_NEW'],
 }
 
@@ -91,6 +92,8 @@ dat_tallas['CAMP'] = dat_tallas['CAMP'].astype(int)
 #===============================================
 titulo_paso('PASO 2: PARTICIPACION POR TALLA (NAC y ADV)')
 dat_tallas = calcular_participacion_talla(dat_tallas)
+dat_tallas = calcular_hhi_tallas(dat_tallas)
+dat_tallas = calcular_desviacion_historica_talla(dat_tallas, ventanas=(3,))
 
 # alias con el mismo nombre que MOD_RF (FACTOR_RCP_DESTINO) para reusar
 # evaluacion.py sin modificarla: el real de cada talla
