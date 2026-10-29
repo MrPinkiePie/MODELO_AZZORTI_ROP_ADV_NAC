@@ -1,21 +1,55 @@
-# Modelos serializados (suelen ser pesados)
-**/4.- models/*.pkl
+# =============================================================================
+# 1. DATOS Y BASES DE DATOS (Raw, Interim, Processed, Pruebas de Modelo)
+# =============================================================================
+# Ignorar todos los archivos de datos manteniendo los README.md y scripts .py
+**/0.- data/**/*.csv
+**/0.- data/**/*.parquet
+**/0.- data/**/*.xlsx
+**/0.- data/**/*.xls
+**/0.- data/**/*.pbix
+**/0.- data/**/*.feather
+**/0.- data/**/*.h5
+*.csv
+*.parquet
+*.xlsx
+*.xls
 
-# Reportes generados (Excel, imágenes)
+# =============================================================================
+# 2. MODELOS SERIALIZADOS Y DASHBOARDS (Binarios pesados)
+# =============================================================================
+**/4.- models/*.pkl
+**/4.- models/*.joblib
+*.pkl
+*.joblib
+*.pbix
+
+# =============================================================================
+# 3. REPORTES Y EXPERIMENTOS GENERADOS
+# =============================================================================
 **/5.- reports/excel/*.xlsx
 **/5.- reports/figures/*.png
-
-# Datos procesados y salidas de pruebas
-**/0.- data/processed/PRUEBAS DE MODELO/*.csv
-**/0.- data/processed/*.parquet
-
-# Python cache y otros
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-
-# Directorios de datos y logs
-0.- MOD_RF/0.- data/
-0.- MOD_TLL/0.- data/
+**/5.- reports/graficos/*.png
+**/6.- experimentos_nube/*.txt
+**/6.- experimentos_nube/*.csv
+**/6.- experimentos_nube/*.parquet
+**/6.- experimentos_nube/**/*.csv
+**/6.- experimentos_nube/**/*.xlsx
 Resultados_Madrugada/
 consola_*.txt
+
+# =============================================================================
+# 4. CACHÉ DE PYTHON, ENTORNOS VIRTUALES E IDEs
+# =============================================================================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+.venv/
+venv/
+env/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

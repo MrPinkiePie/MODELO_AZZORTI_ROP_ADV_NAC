@@ -58,11 +58,11 @@ cycle_features = []
 # en la corrida de entrenar.py que genero df_limpio.parquet.
 numeric_features = [
     'RATIO_PRECIO', 'FACT_ADV_RGN', 'FACTOR_MAX', 'FACTOR_MIN', 'FACTOR_MEDIANA', 
-    'FACT_BOG', 'FACT_OCC1', 'FACT_SAN1', 'FACT_COS', 
-    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN'
+    'PRECIO_PROMEDIO_COMPETIDORES_ORIGEN', 'PRECIO_PROMEDIO_SUBGRUPO_ORIGEN',
+    'MOMENTUM_SUBGRUPO_LAG_3', 'HHI_CLIMA_ORIGEN', 'MOMENTUM_CLIMA_LAG_3'
 ]
 
-categorical_features = []
+categorical_features = ['UBICACION_PAG_MIX']
 
 
 # =========================================================
